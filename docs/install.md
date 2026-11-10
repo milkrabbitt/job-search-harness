@@ -34,5 +34,22 @@ cd job-search-harness
 ./scripts/serve.sh
 ```
 
-打开 [本地控制台](http://127.0.0.1:8876/)。服务运行在当前终端，关掉网页后仍在运行，在终端按 **Ctrl+C** 停止。默认数据放在仓库下独立的 `.job-harness-dev/`。要切换数据目录，给初始化和启动脚本设置同一个 `JOB_HARNESS_DATA_DIR`。遇到端口冲突或缺少依赖，可看 [故障排查](troubleshooting.md)。
+在浏览器打开终端显示的地址，默认是 `http://127.0.0.1:8876/`。服务运行在当前终端，关掉网页后仍在运行，在终端按 **Ctrl+C** 停止。默认数据放在仓库下独立的 `.job-harness-dev/`。要切换数据目录，给初始化和启动脚本设置同一个 `JOB_HARNESS_DATA_DIR`。遇到端口冲突或缺少依赖，可看 [故障排查](troubleshooting.md)。
 
+
+
+<a name="private-profile"></a>
+
+## 登记自己的资料和简历
+
+1. 在仓库之外建立一个私有资料目录，复制 [虚构资料示例](../examples/profile.example.json)，保存为这个目录下的 `profile.json`。替换其中的虚构内容，只保留自己能确认的经历、项目和公开作品链接。偏好可以在导入后从控制台的「资料与设置」修改。
+2. 将要使用的 PDF 保存在本机，在 `resumes` 中为每份简历登记 `path`（文件的实际路径）、`label`（版本名）、`scope`（适用分类，可选 `ai`、`robotics`、`finance`）、`sha256`（用 `shasum -a 256` 或 `sha256sum` 计算）和 `approved`（确认可以用于投递才填 `true`）。Harness 核验文件和校验值；不会从 PDF 自动提取经历。
+3. 在仓库目录运行下面的命令，把两个示例路径换成自己的私有目录和资料文件。不要复用演示目录。
+
+```sh
+export JOB_HARNESS_DATA_DIR="/path/to/private-data"
+python3 -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" init --inheritance "$JOB_HARNESS_DATA_DIR/profile.json"
+./scripts/serve.sh
+```
+
+在开启真实外发前，按[渠道说明](../job_harness/CHANNELS.md)配置账号，并核对本机的资料和简历版本。

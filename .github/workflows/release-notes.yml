@@ -42,5 +42,5 @@ jobs:
           assert '虚构' in body and '预览版' in body
           PY
           gh release edit v0.1.0 --repo "$GITHUB_REPOSITORY" \
-            --title 'v0.1.0 — 公司有招聘系统，你也该有。' \
+            --title 'v0.1.0 · Job Search Harness 预览版' \
             --notes-file "$notes_file"

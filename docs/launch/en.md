@@ -1,34 +1,21 @@
-# Launch copy (drafts for external sharing)
+# Job Search Harness release copy
 
 ## One line
 
-Companies have recruiting systems. Your job search deserves one too. Job Search Harness keeps listings, applications and recruiter conversations in a workspace that runs on your computer.
+Job Search Harness is a local workspace for screening job listings, preparing applications, and tracking recruiter follow-ups.
 
 ## Short post
 
-Did I apply already? Which résumé did I send? What did the recruiter say last time?
+Job Search Harness keeps job descriptions, match reasons, application drafts, and recruiting history in one local workspace. Review a résumé and recipient before sending through NetEase 126, or record a submission you made in a recruiting platform. The offline demo uses fictional data and simulated sending.
 
-Job Search Harness brings those answers together: job-fit evidence, application records, recruiter context and next decisions. Open-source, local-first, and built for applicants.
-
-Try the fictional-data demo without a real résumé, email credentials or model account. There's a copyable setup prompt for your coding assistant, too.
-
-macOS / Linux · Python · MIT · v0.1.0 preview
-https://github.com/milkrabbitt/job-search-harness
-
-Want better tools on the applicant's side? Give it a Star.
+[Repository and setup](https://github.com/milkrabbitt/job-search-harness)
 
 ## Longer post
 
-A job search is a workflow. It deserves somewhere to live.
+Job Search Harness keeps the job description alongside the application and any recruiter conversation you have recorded or synced. It runs locally and has a Chinese web console.
 
-Listings in bookmarks. Résumés in folders. Recruiter replies across different inboxes. A spreadsheet you meant to update. Before taking the next step, you have to reconstruct the last one.
+Start by adding your verified personal facts, an approved résumé PDF, and search preferences. Harness can read configured public company sources, search Liepin with candidate authorization, or work with a job description you add yourself. Its matching rules show what fits, where the role conflicts with your preferences, and what details are missing. An optional local Codex CLI can add a review. You can see any recorded salary range in the jobs list and export the ledger to CSV for your own comparisons.
 
-Job Search Harness brings the context together in a local workspace. Inspect why a listing matches, merge duplicate opportunities, keep application drafts with approved PDFs and sending evidence, and review conversations alongside pending decisions.
+With NetEase 126 configured, Harness can send approved applications and handle a narrow set of preauthorized replies in trusted email threads. You complete official forms and platform chats in your browser, then record the result. Interview times, salary decisions, and offers stay with you.
 
-The core uses Python and SQLite, includes backups and recovery, and is MIT-licensed. The current suite has 75 offline tests. You can run a fictional-data demo without connecting accounts. Optional model review uses your locally authenticated Codex CLI.
-
-This is an early preview: macOS / Linux, a Chinese-language console, macOS Keychain required for some live integrations, and human browser handoff for platform applications and chat. The docs spell out the current support.
-
-Try the demo, then tell us which part of your search needs less busywork.
-
-https://github.com/milkrabbitt/job-search-harness
+The demo uses fictional jobs, applications, and conversations. Run `./scripts/bootstrap.sh --demo` followed by `./scripts/serve.sh`. The README has the system requirements and a prompt you can give to a coding assistant to set it up. [Repository and setup](https://github.com/milkrabbitt/job-search-harness)
