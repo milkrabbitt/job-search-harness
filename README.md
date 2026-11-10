@@ -1,55 +1,46 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Job Search Harness" width="100%">
+  <img src="docs/assets/banner.svg" alt="Job Search Harness — 公司有招聘系统。你，也该有求职系统。" width="100%">
 </p>
-
-<h1 align="center">你的下一份工作，值得一套更好的工具。</h1>
-
-<p align="center">一个属于你自己的 AI 求职工作台，把岗位整理、申请准备和进度跟进串成完整流程。</p>
-
-<p align="center"><strong>少一点复制粘贴，少一点遗漏，多一点有准备的机会。</strong></p>
 
 <p align="center">
-  <a href="#quickstart">立即体验</a> ·
-  <a href="#ai-install">让 AI 帮我安装</a> ·
-  <a href="README.md">中文</a> / <a href="README.en.md">English</a> ·
-  <a href="LICENSE">MIT</a> ·
-  <a href="#tests">测试</a> ·
-  <a href="https://github.com/milkrabbitt/job-search-harness/releases/tag/v0.1.0">v0.1.0 beta</a>
+  <strong>岗位、简历、申请、招聘对话。终于有一个地方，把它们接起来。</strong><br>
+  在自己的电脑上，把一次次零散的申请，变成可以持续推进的求职流程。
 </p>
 
-- **看清为什么值得投。** 根据你的求职条件解释匹配点、明确缺口和待核实项。
-- **把申请送到正确的位置。** 核对收件人和简历版本，查看草稿、发送状态和核验凭据。
-- **让招聘消息有下一步。** 查看会话上下文，把面试时间、薪资和 Offer 等需要判断的事项留给你。
+<p align="center">
+  <a href="#quickstart"><strong>▶ 跑一次演示</strong></a>　·　
+  <a href="#ai-install"><strong>✦ 让 AI 帮你安装</strong></a>　·　
+  <a href="README.en.md">English</a>　·　
+  <a href="https://github.com/milkrabbitt/job-search-harness/releases/tag/v0.1.0">v0.1.0 预览版</a>
+</p>
 
-![实际控制台的运行概览，展示虚构岗位、待处理事项和独立的任务与外发控制](docs/assets/demo-overview.jpg)
+<p align="center">
+  <a href="https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml"><img src="https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-CDF568?style=flat-square&labelColor=171A16" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Python-3.9%2B-CDF568?style=flat-square&labelColor=171A16" alt="Python 3.9 or newer">
+</p>
 
-*实际产品截图。演示中的公司、岗位、申请和消息均为虚构，发送结果由模拟渠道产生。*
+## 别让下一份工作，散落在几十个标签页里。
 
-收藏了很多岗位，却忘了哪些投过？每次申请都重新复制粘贴，聊过的机会还散落在不同地方？Job Search Harness 把这些零散步骤组织起来，让每次求职都有记录、有下一步。
+看到一个岗位，先收藏。发出一份简历，另记一行。招聘方来了消息，再翻聊天找上下文。
 
-<a name="ai-install"></a>
+**求职已经够费心了，进度不该还靠你硬记。**
 
-## 让 AI 帮我安装
+Job Search Harness 是一个本地优先、开源的求职工作台。它把岗位来源、匹配依据、申请材料、招聘对话和待办留在一起。下次打开，知道自己从哪里继续。
 
-复制下面这段，交给 Codex、Claude Code 或 Cursor Agent。你用来安装项目的编程助手，和项目运行时可选的模型，是两个独立角色。体验演示只需要本机 Python。运行时模型复核岗位时，使用已由你在本机登录的 Codex CLI。
+| 这个机会值得投吗？ | 我到底发了什么？ | 下一步该做什么？ |
+| :--- | :--- | :--- |
+| 查看匹配理由、明确缺口和待核实项；合并重复岗位。 | 核对草稿、收件人和已批准的 PDF；回看发送证据。 | 找回招聘对话，把面试安排等事项放进待决定队列。 |
 
-```text
-请在我的电脑上安装并验证 Job Search Harness。
-仓库 https://github.com/milkrabbitt/job-search-harness
+![真实控制台：虚构岗位、模拟申请和待决定事项](docs/assets/demo-overview.jpg)
 
-1. 克隆到一个新目录，阅读 README 和 job_harness/CHANNELS.md。
-2. 运行 ./scripts/doctor.sh，检查 Python、SQLite、时区数据和可用端口。用 python3 -m venv .venv 创建隔离环境，把 PYTHON_BIN 指向 .venv/bin/python。按 requirements.txt 核对依赖，仅在缺少时区数据时按文档安装。
-3. 运行 ./scripts/bootstrap.sh --demo，再用 ./scripts/serve.sh 启动演示，打开它显示的本机地址。先用虚构数据检查岗位匹配、申请草稿和模拟发送证据、招聘消息与待决定事项。
-4. 用 .venv/bin/python -B -m unittest discover -s tests -v 运行测试。演示和测试期间保持真实账号与外发关闭。
-5. 如果我希望使用运行时模型，检查本机是否已有经我本人登录的 Codex CLI。向我说明这一步是可选的。等我本机完成认证后，在独立的非演示数据目录中将 config.json 的 model.enabled 设为 true，必要时设置 model.executable，重启该实例。然后在控制台“资料与设置”配置实际可用的模型、调用上限与超时，并安排模型检查。
-6. 把实际验证结果、本机地址、数据目录、启动与停止方法告诉我。不要读取或复用已有求职数据。密钥与授权码由我在本机的系统凭据管理器或官方登录流程中配置，禁止粘贴到聊天、写入代码或提交到 Git。
-```
+<p align="center"><sub>真实运行界面 · 全部为虚构演示数据 · 回执来自本机模拟</sub></p>
 
 <a name="quickstart"></a>
 
-## 立即体验
+## 先跑起来，再决定是否用它求职。
 
-需要 macOS 或 Linux、Python 3.9+、SQLite 3.24+ 和包含 `Asia/Shanghai` 的 IANA 时区数据。界面当前为中文。默认运行只使用 Python 标准库。
+**演示无需真实简历、邮箱授权或模型账号。** macOS / Linux，Python 3.9+；默认运行只用 Python 标准库，无需前端构建。还需 SQLite 3.24+ 与 IANA 时区数据，诊断脚本会检查。
 
 ```sh
 git clone https://github.com/milkrabbitt/job-search-harness.git
@@ -59,27 +50,56 @@ cd job-search-harness
 ./scripts/serve.sh
 ```
 
-打开 [本地控制台](http://127.0.0.1:8876/)。服务运行在当前终端，关掉网页后仍在运行，在终端按 **Ctrl+C** 停止。默认数据放在仓库下独立的 `.job-harness-dev/`。要切换数据目录，给初始化和启动脚本设置同一个 `JOB_HARNESS_DATA_DIR`。遇到端口冲突或缺少依赖，可看 [故障排查](#troubleshooting)。
+打开 **http://127.0.0.1:8876/**。按 **Ctrl+C** 停止。演示数据保存在 `.job-harness-dev/`。
 
-## 三个你可以亲手走一遍的场景
+<a name="ai-install"></a>
 
-### 收藏了一条岗位，想知道值不值得投
+### 不想研究安装？把这段交给你的编程助手。
 
-在「岗位」查看演示 JD，或补录一份你核实过的岗位和求职偏好。工作台把匹配理由、明确不满足的条件和招聘方没有说明的条件分别保存。回看时有原链接和判断依据，排序分只用于比较机会。
+```text
+请在我的电脑上安装并验证 Job Search Harness：
+https://github.com/milkrabbitt/job-search-harness
 
-![实际岗位页，展示演示 JD 的匹配理由和待核实项](docs/assets/demo-jobs.jpg)
+先阅读 README.md、docs/install.md 和 job_harness/CHANNELS.md。
+检查系统是否支持，使用独立目录和 Python 虚拟环境，先启动离线演示。
+验证岗位匹配、申请记录、招聘消息和待决定事项，运行项目测试。
+保持真实账号与外发关闭，不读取我已有的求职资料。
+完成后给我本机入口，以及启动、停止和数据保存位置。
+若我需要真实渠道或模型，再说明支持范围，并引导我在本机完成认证；不要让我把密钥发到聊天中。
+```
 
-### 申请写好了，想确认附件和去向
+适用于有终端操作能力的 Codex、Claude Code、Cursor Agent 等编程助手。**帮助安装的助手，与运行时模型是两回事**：当前可选的模型复核通过本机已登录的 Codex CLI 完成。
 
-打开「草稿与发送」，核对岗位、收件人、正文和简历。演示数据可用来查看申请的模拟结果与凭据。实际启用邮箱后，遇到发送结果不明的申请，工作台保留待核验状态，按邮件 Message-ID 查证，避免盲目重发。站内申请则由你在原平台提交，核实后登记回执。
+[完整安装说明 →](docs/install.md) · [渠道与系统要求 →](job_harness/CHANNELS.md) · [安装遇到问题 →](docs/troubleshooting.md)
 
-![实际发送页，展示虚构申请的模拟确认凭据](docs/assets/demo-outbox.jpg)
+## 把“投过了”变成一条能追溯的记录。
 
-### 收到面试邀约，需要自己挑时间
+### 01 / 先看清机会，再花时间申请
 
-在「招聘消息」打开演示会话，再到「待我决定」查看需要确认的安排。原消息、关联岗位和处理进度留在同一工作台。能否赴约、接受什么条件，由你决定。
+同一岗位出现在多个渠道，不必当成多个新机会。保留原始来源，把匹配点、明确缺口和招聘方没说清的条件放在一起。**分数用于排序，判断有据可查。**
 
-![实际招聘消息页，展示虚构招聘会话](docs/assets/demo-inbox.jpg)
+![真实岗位页：虚构 JD 的匹配理由、缺口和待核实项](docs/assets/demo-jobs.jpg)
+
+### 02 / 每一份申请，都能回头查
+
+申请正文、收件人、批准过的简历版本与发送证据对应保存。邮件结果不明时，先按原 Message-ID 核验；站内提交由你在原平台完成，再登记回执。**“准备好了”和“真的发出去了”，分别记录。**
+
+![真实申请页：虚构申请与模拟确认凭据](docs/assets/demo-outbox.jpg)
+
+### 03 / 下次打开，接着往前走
+
+招聘方上次说了什么？这个邀约还等你确认吗？在同一个工作台查看会话、关联岗位和需要你拍板的事项。**把记忆留给系统，把选择留给自己。**
+
+![真实消息页：虚构招聘对话及上下文](docs/assets/demo-inbox.jpg)
+
+## 为什么是 Harness？
+
+一次聊天结束后，求职还在继续。Harness 用持久化记录、任务状态和核验步骤，把下一次行动接上来。
+
+- **本地运行，资料可带走。** Python + SQLite，本机控制台，支持备份与恢复。
+- **进度能暂停，结果能核对。** 后台任务与外发分开控制，处理重复岗位、过期草稿和不明确的发送结果。
+- **AI 有明确职责。** 可选模型复核匹配特征；授权和发送决定仍由工作台处理。
+- **源码可以改。** MIT 开源，按自己的求职习惯继续扩展。
 
 ## 从演示切换到自己的资料
 
@@ -112,18 +132,26 @@ cd job-search-harness
 - **本机运行。** 控制台仅监听回环地址。macOS 可以用项目的 `install` 子命令安装当前用户的 LaunchAgent，用 `start`、`status`、`stop` 管理。Linux 可运行前台服务。电脑休眠或关机时后台任务也会暂停。
 - **运行任务和外发分别控制。** 在「运行概览」暂停全部外发时，搜索与查收可继续。暂停后台任务会停掉调度。
 - **真实资料由你保管。** SQLite 数据、简历与备份请放在源码目录之外。系统钥匙串保存真实渠道凭据。项目不会自动带入其他安装实例的数据。
+- **可选模型调用。** 开启 Codex 复核后，有限的结构化岗位匹配特征会交给其模型服务。本机工作台不等于本地模型推理。
 - **备份和恢复。** 在控制台创建备份，或运行 `python3 -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" backup`。停止该实例后，使用同一数据目录运行 `restore /path/to/backup.sqlite3`。恢复后先核对发送记录，再恢复外发。
 
 <a name="tests"></a>
 
 ## 测试
 
-本地测试使用临时数据库、虚构数据和模拟渠道。它覆盖匹配、查重、草稿失效、附件校验、暂停、发送结果核验与恢复。
+当前套件包含 **75 项测试**，使用临时数据库、虚构数据和模拟渠道。它覆盖匹配、查重、草稿失效、附件校验、暂停、发送结果核验与恢复。
 
 ```sh
 python3 -B -m unittest discover -s tests -v
 ```
 
-如果它让你的求职少了一点混乱，欢迎点个 Star。也欢迎提问题、分享使用体验，或一起完善下一个功能。请先用虚构数据复现问题，再 [提交 Issue](https://github.com/milkrabbitt/job-search-harness/issues)。
+## 让求职者，也有自己的好工具。
+
+**如果你也希望求职工具更多站在求职者这一边，给它一个 Star。**
+
+先跑一次演示，再告诉我们：哪一步最该替你省下来。欢迎 [反馈体验](https://github.com/milkrabbitt/job-search-harness/issues)、改进文档，或贡献代码。提交问题时请使用虚构数据。
+
+[↑ 回到演示入口](#quickstart) · [复制安装提示词](#ai-install)
 
 按 [MIT 许可证](LICENSE) 开源。
+

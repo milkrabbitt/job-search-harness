@@ -1,29 +1,34 @@
-# Job Search Harness launch copy
+# Launch copy (drafts for external sharing)
 
 ## One line
 
-Job Search Harness is a local AI job-search workspace for sorting roles, preparing applications, and keeping up with recruiter conversations.
+Companies have recruiting systems. Your job search deserves one too. Job Search Harness keeps listings, applications and recruiter conversations in a workspace that runs on your computer.
 
-## Social post
+## Short post
 
-Your next job deserves better tools.
+Did I apply already? Which résumé did I send? What did the recruiter say last time?
 
-Saved postings, half-written applications, and interviews waiting on a decision can live in one place. Job Search Harness records why a role fits, which résumé goes with it, and what to do next.
+Job Search Harness brings those answers together: job-fit evidence, application records, recruiter context and next decisions. Open-source, local-first, and built for applicants.
 
-Less copying, fewer missed details, and more chances to show up prepared. Try the open-source demo with fictional data and simulated sending.
+Try the fictional-data demo without a real résumé, email credentials or model account. There's a copyable setup prompt for your coding assistant, too.
 
-[Try Job Search Harness on GitHub](https://github.com/milkrabbitt/job-search-harness)
+macOS / Linux · Python · MIT · v0.1.0 preview
+https://github.com/milkrabbitt/job-search-harness
 
-## Long post
+Want better tools on the applicant's side? Give it a Star.
 
-A job search can get scattered quickly. One role is in your bookmarks, a résumé is stuck in an email draft, and the interview time is in a different conversation. Coming back to it often starts with figuring out where you left off.
+## Longer post
 
-Job Search Harness puts roles, applications, and recruiter conversations in one local workspace, with room for the reasons behind your choices and the next action.
+A job search is a workflow. It deserves somewhere to live.
 
-Bring a job description and your search preferences. You can see what fits, what conflicts, and what the employer has left open. When you prepare an application, review the recipient and résumé version alongside the draft and any sending evidence. When a recruiter proposes an interview, the original conversation stays with the role while the scheduling decision stays with you.
+Listings in bookmarks. Résumés in folders. Recruiter replies across different inboxes. A spreadsheet you meant to update. Before taking the next step, you have to reconstruct the last one.
 
-With an account configured, the workbench can check NetEase 126 recruiting email and send authorized messages. On BOSS Zhipin, Liepin, and Yupao, you complete platform actions in your logged-in browser and keep the queue and verified outcomes in the workbench. An optional, locally authenticated Codex CLI can review match evidence. The demo needs zero external accounts.
+Job Search Harness brings the context together in a local workspace. Inspect why a listing matches, merge duplicate opportunities, keep application drafts with approved PDFs and sending evidence, and review conversations alongside pending decisions.
 
-Run `./scripts/bootstrap.sh --demo` and `./scripts/serve.sh` to try it with fictional roles, conversations, and simulated sending. You can also copy the installation prompt near the top of the README into Codex, Claude Code, or Cursor Agent.
+The core uses Python and SQLite, includes backups and recovery, and is MIT-licensed. The current suite has 75 offline tests. You can run a fictional-data demo without connecting accounts. Optional model review uses your locally authenticated Codex CLI.
 
-If it makes your search a little less chaotic, a Star is welcome. Feedback and contributions are welcome too. [Repository and installation instructions](https://github.com/milkrabbitt/job-search-harness)
+This is an early preview: macOS / Linux, a Chinese-language console, macOS Keychain required for some live integrations, and human browser handoff for platform applications and chat. The docs spell out the current support.
+
+Try the demo, then tell us which part of your search needs less busywork.
+
+https://github.com/milkrabbitt/job-search-harness

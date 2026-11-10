@@ -1,55 +1,43 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Job Search Harness" width="100%">
+  <img src="docs/assets/banner-en.svg" alt="Job Search Harness — Companies have recruiting systems. Your job search deserves one too." width="100%">
 </p>
 
-<h1 align="center">Your next job deserves better tools.</h1>
-
-<p align="center">A personal AI job-search workspace for sorting opportunities, preparing applications, and keeping up with recruiters.</p>
-
-<p align="center"><strong>Less copying, fewer missed details, and more chances to show up prepared.</strong></p>
+<p align="center">Listings. Résumés. Applications. Recruiter conversations.<br><strong>One workspace to pick up where you left off.</strong></p>
 
 <p align="center">
-  <a href="#quickstart">Try it now</a> ·
-  <a href="#ai-install">Let AI install it</a> ·
-  <a href="README.md">中文</a> / <a href="README.en.md">English</a> ·
-  <a href="LICENSE">MIT</a> ·
-  <a href="#tests">Tests</a> ·
-  <a href="https://github.com/milkrabbitt/job-search-harness/releases/tag/v0.1.0">v0.1.0 beta</a>
+  <a href="#quickstart"><strong>▶ Try the demo</strong></a>　·　
+  <a href="#ai-install"><strong>✦ Let your coding assistant install it</strong></a>　·　
+  <a href="README.md">中文</a>　·　
+  <a href="https://github.com/milkrabbitt/job-search-harness/releases/tag/v0.1.0">v0.1.0 preview</a>
 </p>
 
-- **See why a role might fit.** Review the evidence, the gaps, and what the job description leaves open.
-- **Keep applications accountable.** Check the recipient and résumé version, then see the draft, send status, and available evidence.
-- **Give every recruiter conversation a next step.** Read the context and keep interview scheduling, salary, and offers in your decision queue.
+<p align="center">
+  <a href="https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml"><img src="https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-CDF568?style=flat-square&labelColor=171A16" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Python-3.9%2B-CDF568?style=flat-square&labelColor=171A16" alt="Python 3.9 or newer">
+</p>
 
-![Actual dashboard with fictional applications and separate task and outbound controls](docs/assets/demo-overview.jpg)
+## Your next job shouldn't get lost in your tabs.
 
-*Screenshot from the running product. Companies, roles, applications, and messages in the demo are fictional. The demo uses simulated sending.*
+You save a listing. Send a résumé. Get a reply. Then spend the next session piecing together what happened.
 
-Saved dozens of postings and lost track of which ones you applied to? Still copying the same details into each application while conversations pile up across platforms? Job Search Harness gives those scattered steps a record and a next action.
+**The search is hard enough. Remembering its status shouldn't be another job.**
 
-<a name="ai-install"></a>
+Job Search Harness is an open-source workspace that runs on your computer. Keep job sources, match evidence, application materials, recruiter conversations and next actions together.
 
-## Let an AI assistant install it
+| Is this role worth pursuing? | What did I actually send? | What needs my attention? |
+| :--- | :--- | :--- |
+| Review match reasons, gaps and unknowns. Merge duplicate listings. | Check the draft, recipient, approved PDF and sending evidence. | Pick up recruiter conversations and review pending decisions. |
 
-Paste this into Codex, Claude Code, or Cursor Agent. Your installation assistant sets up the project. The optional runtime integration uses a locally authenticated Codex CLI to review job matches. The demo runs with local Python.
+![Actual console using fictional jobs and simulated receipts](docs/assets/demo-overview.jpg)
 
-```text
-Install and verify Job Search Harness on my computer.
-Repository https://github.com/milkrabbitt/job-search-harness
-
-1. Clone the repository into a new directory. Read README.en.md and job_harness/CHANNELS.md.
-2. Run ./scripts/doctor.sh to check Python, SQLite, timezone data, and the local port. Create a virtual environment with python3 -m venv .venv and point PYTHON_BIN to .venv/bin/python. Check requirements.txt and install timezone data only if needed.
-3. Run ./scripts/bootstrap.sh --demo, then ./scripts/serve.sh. Open the local URL printed by the server. Inspect the fictional job matches, application draft and simulated sending evidence, recruiter thread, and decision queue.
-4. Run .venv/bin/python -B -m unittest discover -s tests -v. Keep real accounts and outbound sending disabled during the demo and tests.
-5. If I want the optional runtime model, check for a Codex CLI installation authenticated by me on this computer. Once I have authenticated locally, set model.enabled to true in config.json in a separate non-demo data directory. Set model.executable if needed and restart that instance. In Settings, configure a model actually available to me, set call and timeout limits, and schedule a model check.
-6. Tell me what you verified and provide the local URL, data directory, and start and stop instructions. Leave any existing job-search data alone. I will enter secrets in the local system credential manager or the provider's official authentication flow. Keep credentials out of chat, source code, and Git.
-```
+<p align="center"><sub>Real running product · Fictional demo data · Simulated receipts</sub></p>
 
 <a name="quickstart"></a>
 
-## Try it now
+## Run the demo before connecting anything.
 
-Requires macOS or Linux, Python 3.9+, SQLite 3.24+, and IANA timezone data for `Asia/Shanghai`. The current console is in Chinese. The default runtime uses the Python standard library.
+**No real résumé, email credentials or model account needed.** Requires macOS / Linux, Python 3.9+, SQLite 3.24+ and IANA timezone data. The default runtime uses the Python standard library; no frontend build is required. The current console is in Chinese.
 
 ```sh
 git clone https://github.com/milkrabbitt/job-search-harness.git
@@ -59,27 +47,58 @@ cd job-search-harness
 ./scripts/serve.sh
 ```
 
-Open the [local console](http://127.0.0.1:8876/). Closing the browser tab leaves the service running. Press **Ctrl+C** in the terminal to stop the foreground process. The default data directory is `.job-harness-dev/`. To use a different directory, set the same `JOB_HARNESS_DATA_DIR` for bootstrap and serve. See [troubleshooting](#troubleshooting) if a port is occupied or a dependency is missing.
+Open **http://127.0.0.1:8876/**. Press **Ctrl+C** to stop. Demo data is stored in `.job-harness-dev/`.
 
-## Three workflows to try
+<a name="ai-install"></a>
 
-### Turn a saved posting into a shortlist decision
+### Prefer your coding assistant to handle setup?
 
-Open the fictional listing under 「岗位」 (Jobs), or add a posting you verified and your own search preferences. You can see the reasons for a match, stated requirements that conflict with your preferences, and details the employer has left open. The source link and the review stay attached to the role. The score helps order opportunities.
+```text
+Install and verify Job Search Harness on my computer:
+https://github.com/milkrabbitt/job-search-harness
 
-![Actual Jobs screen showing match reasons for a fictional listing](docs/assets/demo-jobs.jpg)
+Read README.en.md, docs/install.en.md and job_harness/CHANNELS.md first.
+Check OS support. Use a separate directory and Python virtual environment.
+Start the offline demo; verify job matches, applications, recruiter messages
+and pending decisions. Run the project tests.
+Keep real accounts and outbound sending disabled. Leave my existing data alone.
+Give me the local URL, start/stop commands and data location.
+If I want live channels or model integration, explain support and guide me
+through local authentication. Never ask me to paste secrets into chat.
+```
 
-### Check what went into an application
+Use a terminal-capable coding assistant such as Codex, Claude Code or Cursor Agent. The installer assistant and runtime model are separate: the optional match review currently uses a locally authenticated Codex CLI.
 
-Open 「草稿与发送」 (Drafts and sending) to check the recipient, body, and résumé. Use the demo to inspect the simulated outcome and its evidence. With real email configured, a send with an uncertain result stays pending verification. The service checks the original Message-ID before any retry. For a platform application, submit in the original browser session and record the verified result.
+[Full installation guide →](docs/install.en.md) · [Channel requirements →](job_harness/CHANNELS.md) · [Troubleshooting →](docs/troubleshooting.md)
 
-![Actual sending queue with a fictional application draft and a simulated receipt](docs/assets/demo-outbox.jpg)
+## An application you can trace, not just remember.
 
-### Keep the recruiter context with the decision
+### 01 / Understand the opportunity
 
-Open a fictional thread under 「招聘消息」 (Recruiter messages), then check 「待我决定」 (Decisions). The original message, related job, and status stay together while you decide when to interview or which conditions to accept.
+Keep duplicate listings from becoming duplicate work. See the original source, match reasons, explicit gaps and unanswered questions together. **The score orders opportunities; the evidence helps you decide.**
 
-![Actual recruiter inbox showing a fictional conversation](docs/assets/demo-inbox.jpg)
+![Actual Jobs screen with fictional matching evidence](docs/assets/demo-jobs.jpg)
+
+### 02 / Know what went out
+
+Keep the draft, recipient, approved résumé and receipt together. An uncertain email result is reconciled against its original Message-ID. Submit platform applications in your browser and record the evidence. **Prepared and sent are separate states.**
+
+![Actual application screen with a simulated receipt](docs/assets/demo-outbox.jpg)
+
+### 03 / Pick up where you left off
+
+Read the recruiter thread alongside its job and pending decisions. Keep interview arrangements visible until you decide. **Let the workspace hold the context. Keep the decisions yours.**
+
+![Actual recruiter inbox using fictional conversations](docs/assets/demo-inbox.jpg)
+
+## Why a harness?
+
+A chat ends. Your job search doesn't. Persistent records, task states and verification steps carry the work into the next session.
+
+- **Runs locally.** Python, SQLite, a loopback console, backups and recovery.
+- **Progress you can inspect.** Separate task and outbound controls; duplicate checks, stale-draft checks and uncertain-send handling.
+- **AI with a specific role.** Optional match review; authorization and sending remain controlled by the workbench.
+- **Yours to extend.** MIT-licensed source you can adapt to your search.
 
 ## Use your own data and accounts
 
@@ -112,18 +131,26 @@ See the [channel setup and dependency guide](job_harness/CHANNELS.md) for creden
 - **Runs locally.** The console listens on the loopback address. On macOS, the `install` subcommand installs a LaunchAgent for the current user, which can be managed with `start`, `status`, and `stop`. Linux supports foreground operation. Tasks pause when the computer sleeps or shuts down.
 - **Separate controls for tasks and outbound sending.** Pause outbound actions while job discovery and inbox checks continue. Pause background tasks to stop scheduling.
 - **Private data stays under your control.** Keep SQLite data, résumés, and backups outside the repository. Real channel credentials are stored in the system Keychain. Any enabled external channel receives the material you send through it.
+- **Optional model calls.** Enabling Codex review sends a limited set of structured matching features to its model service. A local workspace does not mean local model inference.
 - **Back up and restore.** Back up from the console or run `python3 -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" backup`. Stop the instance before running `restore /path/to/backup.sqlite3` with the same data directory. Check sending evidence before resuming outbound actions after a restore.
 
 <a name="tests"></a>
 
 ## Tests
 
-Local tests exercise matching, deduplication, stale drafts, attachment checks, pause controls, and sending recovery with temporary databases, fictional data, and simulated channels.
+The current suite contains **75 tests** covering matching, deduplication, stale drafts, attachment checks, pause controls, and sending recovery with temporary databases, fictional data, and simulated channels.
 
 ```sh
 python3 -B -m unittest discover -s tests -v
 ```
 
-If this makes your job search a little less chaotic, a Star is welcome. You can also share how you use it, suggest an improvement, or [open an issue](https://github.com/milkrabbitt/job-search-harness/issues) with a fictional example.
+## Better tools on the applicant’s side.
+
+**If that is a future you want, give the project a Star.**
+
+Try the demo, then tell us which part of your search needs less busywork. [Share feedback](https://github.com/milkrabbitt/job-search-harness/issues), improve the docs or contribute code. Use fictional data in reports.
+
+[↑ Try the demo](#quickstart) · [Copy the installation prompt](#ai-install)
 
 Released under the [MIT license](LICENSE).
+
