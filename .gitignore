@@ -1,0 +1,28 @@
+# Existing private ledgers, resume inputs and locally exported evidence.
+/work/
+/outputs/
+/private/
+/runtime/
+/resumes/
+/backups/
+/logs/
+
+# Local runtime state and credentials.
+.env
+.env.*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.pdf
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Per-install profile and state. The checked-in example lives under examples/.
+/.job-harness-dev/
+config.json
+*.zip
+
+# Isolated Python environments.
+.venv/

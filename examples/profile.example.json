@@ -1,0 +1,27 @@
+{
+  "preferences": {
+    "target_scope": "示例：交互产品",
+    "cities": "示例城市",
+    "directions": "交互产品,软件产品",
+    "work_arrangement": "示例：本地或远程",
+    "salary_floor": "",
+    "auto_send": false,
+    "allow_follow_up": false
+  },
+  "facts": [
+    {
+      "key": "summary_dialogue",
+      "value": "虚构示例：设计过一个对话交互原型，并用合成对话测试功能。",
+      "source": "profile.example.json（虚构资料）",
+      "state": "verified"
+    },
+    {
+      "key": "portfolio_public",
+      "value": "https://portfolio.example/fictional-demo",
+      "source": "profile.example.json（虚构链接）",
+      "state": "verified"
+    }
+  ],
+  "resumes": [],
+  "sources": []
+}

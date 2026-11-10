@@ -1,0 +1,29 @@
+{
+  "port": 8876,
+  "email": {
+    "enabled": false,
+    "account": "",
+    "keychain_service": "job-harness-126-imap-smtp",
+    "known_contacts": [],
+    "known_message_ids": []
+  },
+  "channels": {
+    "official": {},
+    "liepin": {
+      "enabled": false,
+      "queries": [
+        {
+          "keyword": "<岗位关键词>",
+          "location": "<目标城市>"
+        }
+      ]
+    }
+  },
+  "model": {
+    "enabled": false,
+    "executable": ""
+  },
+  "notifications": {
+    "enabled": false
+  }
+}
