@@ -47,7 +47,7 @@ cd job-search-harness
 ./scripts/serve.sh
 ```
 
-Open **http://127.0.0.1:8876/**. Press **Ctrl+C** to stop. Demo data is stored in `.job-harness-dev/`.
+Open **[http://127.0.0.1:8876/](http://127.0.0.1:8876/)**. Press **Ctrl+C** to stop. Demo data is stored in `.job-harness-dev/`.
 
 <a name="ai-install"></a>
 

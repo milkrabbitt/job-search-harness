@@ -50,7 +50,7 @@ cd job-search-harness
 ./scripts/serve.sh
 ```
 
-打开 **http://127.0.0.1:8876/**。按 **Ctrl+C** 停止。演示数据保存在 `.job-harness-dev/`。
+打开 **[http://127.0.0.1:8876/](http://127.0.0.1:8876/)**。按 **Ctrl+C** 停止。演示数据保存在 `.job-harness-dev/`。
 
 <a name="ai-install"></a>
 
