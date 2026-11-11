@@ -67,6 +67,8 @@ class FixtureMailbox:
 
 
 class SchedulerAcceptance(TestCase):
+    WAIT_TIMEOUT = 30
+
     def setUp(self):
         temp = TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -106,7 +108,7 @@ class SchedulerAcceptance(TestCase):
         def stop():
             service.shutdown.set()
             service.wake.set()
-            worker.join(3)
+            worker.join(self.WAIT_TIMEOUT)
             self.assertFalse(worker.is_alive())
 
         self.addCleanup(stop)
@@ -117,12 +119,19 @@ class SchedulerAcceptance(TestCase):
             return [dict(row) for row in connection.execute(query, params)]
 
     def until(self, predicate):
-        deadline = time.monotonic() + 5
+        # These are state-machine assertions, not a storage-speed benchmark.
+        # Hosted Windows runners can spend several seconds flushing the real
+        # SQLite fixture; allow more than the store's 8-second busy timeout.
+        deadline = time.monotonic() + self.WAIT_TIMEOUT
         while time.monotonic() < deadline:
             if value := predicate():
                 return value
             time.sleep(.02)
-        self.fail("timed out waiting for the isolated scheduler")
+        self.fail("timed out waiting for the isolated scheduler: " + repr({
+            "tasks": self.rows("SELECT kind,state,detail FROM tasks ORDER BY id"),
+            "outbox": self.rows("SELECT state,evidence FROM outbox ORDER BY id"),
+            "events": self.rows("SELECT message FROM events ORDER BY id DESC LIMIT 8"),
+        }))
 
     def outbox(self, state):
         return self.rows("SELECT * FROM outbox WHERE state=?", (state,))
@@ -130,7 +139,7 @@ class SchedulerAcceptance(TestCase):
     def test_background_crash_recovers_provider_receipt_without_resend(self):
         self.mail.crash_after_submit = True
         first = self.start_worker(self.service)
-        first.join(5)
+        first.join(self.WAIT_TIMEOUT)
         self.assertFalse(first.is_alive())
         item, = self.outbox("sending")
         self.assertEqual(self.rows("SELECT * FROM history"), [])
