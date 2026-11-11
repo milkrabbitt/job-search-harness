@@ -21,7 +21,15 @@
   },
   "model": {
     "enabled": false,
-    "executable": ""
+    "provider": "none",
+    "name": "",
+    "base_url": "",
+    "api_key_env": "",
+    "executable": "",
+    "max_calls": 3,
+    "timeout": 75,
+    "max_output_tokens": 1024,
+    "cost_limit": ""
   },
   "notifications": {
     "enabled": false

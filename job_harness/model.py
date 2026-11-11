@@ -1,5 +1,6 @@
 """Bounded advisory calls through the locally authenticated Codex CLI."""
 import json
+import math
 import os
 import re
 import shutil
@@ -14,23 +15,35 @@ SCHEMA = {
     "required": ["summary", "review"],
     "additionalProperties": False,
 }
-SAFE_LABEL = re.compile(r"[A-Za-z0-9._-]{1,70}\Z")
+SAFE_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+\-]{0,127}\Z")
 PROBE = {"state": "review", "score": 40, "strengths": ["AI 应用或 Agent", "软件产品交付"],
          "hard_count": 0, "unknown_count": 2, "scope": "ai"}
 
 class CodexModel:
     def __init__(self, config):
-        self.exe = config.get("model", {}).get("executable") or shutil.which("codex") or str(BUNDLED)
+        executable = str(config.get("model", {}).get("executable") or "").strip()
+        if executable:
+            # A name such as "codex" is a PATH lookup, not a file in the
+            # application's working directory. shutil.which honors PATHEXT
+            # on Windows, including the installed codex.exe launcher.
+            if "/" in executable or "\\" in executable or Path(executable).is_absolute():
+                path = Path(executable).expanduser()
+                self.exe = str(path if path.is_absolute() else path.resolve())
+            else:
+                self.exe = shutil.which(executable) or executable
+        else:
+            self.exe = shutil.which("codex") or shutil.which("codex.exe") or str(BUNDLED)
         self.home = Path.home()
 
     def configured_default(self):
         try:
-            with (self.home / ".codex" / "config.toml").open() as stream:
+            config_home = Path(os.environ.get("CODEX_HOME") or self.home / ".codex").expanduser()
+            with (config_home / "config.toml").open() as stream:
                 for line in stream:
                     if line.lstrip().startswith("["):
                         break
-                    found = re.fullmatch(r'\s*model\s*=\s*["\']([A-Za-z0-9._-]{1,64})["\']\s*(?:#.*)?', line.strip())
-                    if found:
+                    found = re.fullmatch(r'\s*model\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?', line.strip())
+                    if found and SAFE_LABEL.fullmatch(found[1]):
                         return found[1]
         except OSError:
             pass
@@ -42,15 +55,26 @@ class CodexModel:
             return {"state": "failed", "model": "未识别", "detail": "模型名称不符合官方 CLI 参数格式"}
         if not Path(self.exe).is_file():
             return {"state": "failed", "model": model or "未识别", "detail": "未找到 Codex CLI"}
-        facts = PROBE if evidence is None else {
-            "state": evidence.get("state") if evidence.get("state") in {"match", "review", "excluded"} else "review",
-            "score": int(evidence.get("score", 0)),
-            "scope": evidence.get("scope") if evidence.get("scope") in {"ai", "robotics", "finance"} else "ai",
-            "hard_count": len(evidence.get("hard", [])),
-            "unknown_count": len(evidence.get("unknown", [])),
-            "strengths": [name for name in ("具身与机器人", "对话、记忆与交互", "AI 应用或 Agent",
-                                             "软件产品交付", "金融产品或分析") if name in evidence.get("strengths", [])],
-        }
+        if evidence is None:
+            facts = dict(PROBE)
+        elif not isinstance(evidence, dict):
+            return {"state": "failed", "model": model or "CLI 默认", "detail": "匹配依据格式无效"}
+        else:
+            state, scope, score = evidence.get("state"), evidence.get("scope"), evidence.get("score", 0)
+            if isinstance(score, bool) or not isinstance(score, (int, float)) or (isinstance(score, float) and not math.isfinite(score)):
+                score = 0
+            def count(key):
+                value = evidence.get(key, [])
+                return min(len(value), 1000) if isinstance(value, list) else 0
+            strengths = evidence.get("strengths", [])
+            facts = {
+                "state": state if isinstance(state, str) and state in {"match", "review", "excluded"} else "review",
+                "score": max(0, min(100, int(score))),
+                "scope": scope if isinstance(scope, str) and scope in {"ai", "robotics", "finance", "general"} else "other",
+                "hard_count": count("hard"), "unknown_count": count("unknown"),
+                "strengths": [name for name in ("具身与机器人", "对话、记忆与交互", "AI 应用或 Agent",
+                                                 "软件产品交付", "金融产品或分析") if isinstance(strengths, list) and name in strengths],
+            }
         prompt = ("请用简短中文总结这个求职匹配的结构化判断并列出至多三项建议复核点。"
                   "评分不是录用概率。仅基于下方字段，不补充事实。返回约定 JSON。\n"
                   + json.dumps(facts, ensure_ascii=False))
@@ -64,13 +88,13 @@ class CodexModel:
             if model:
                 args.extend(["--model", model])
             args.append("-")
-            env = {key: value for key, value in os.environ.items() if key in {
+            env = {key: value for key, value in os.environ.items() if key.upper() in {
                 "HOME", "USER", "LOGNAME", "PATH", "LANG", "LC_ALL", "TMPDIR", "CODEX_HOME", "HTTPS_PROXY", "HTTP_PROXY",
-                "NO_PROXY", "https_proxy", "http_proxy", "no_proxy"
+                "NO_PROXY", "SYSTEMROOT", "COMSPEC", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "WINDIR", "PATHEXT"
             }}
             try:
                 finished = subprocess.run(args, input=prompt, cwd=temp, env=env, text=True, encoding="utf-8",
-                                          capture_output=True, timeout=config["timeout"], check=False)
+                                          capture_output=True, timeout=config["timeout"], check=False, shell=False)
             except subprocess.TimeoutExpired:
                 return {"state": "failed", "model": model or "CLI 默认", "detail": "Codex CLI 调用超时"}
             except OSError:

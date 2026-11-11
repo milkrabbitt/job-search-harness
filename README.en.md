@@ -1,92 +1,117 @@
 # Job Search Harness
 
-Job Search Harness is a local workspace for finding roles, screening job descriptions against your preferences, preparing applications, and following up on recruiter messages. The web console is in Chinese.
+A job-search workspace that runs on your computer. Set your goals, model and recruiting sources, then keep job evidence, application materials, recruiter messages and next actions together. Background tasks and outbound sending have separate controls. The console is currently in Chinese.
 
-[Run the demo](#quickstart) · [AI installation prompt](#ai-install) · [中文](README.md) · [Tests](#tests) · [MIT](LICENSE) · [v0.1.0 beta](https://github.com/milkrabbitt/job-search-harness/releases/tag/v0.1.0)
+[First setup](#start) · [Offline demo](#quickstart) · [AI installation prompt](docs/install.en.md#ai-install) · [中文](README.md) · [Releases](https://github.com/milkrabbitt/job-search-harness/releases)
 
-## How the workflow works
+## How it works
 
-1. **Set up your profile.** Add verified personal facts, a local résumé PDF you have approved for use, and preferences such as cities, role types, and an optional salary floor. You register the PDF yourself; Harness does not extract your work history from it.
-2. **Find and screen jobs.** Search configured public company sources and authorized Liepin listings, or add job descriptions by hand. Matching rules explain the fit, gaps, and missing information. An optional Codex CLI review can add notes.
-3. **Send an application.** Check the recipient, message, and attachment. With NetEase 126 configured, Harness can send approved applications. Submit official forms and platform messages in the original browser, then record the verified result.
-4. **Follow up.** Read synced email and recorded platform conversations with their related jobs. Harness can send a narrow set of preauthorized replies to verified email threads. Interview scheduling, salary decisions, and offers stay in the decision queue for you.
-5. **Review the record.** Check application status, evidence, and communication history. View the salary range recorded for each role and export the application ledger to CSV for your own comparisons. Unlisted pay stays unknown, and Harness does not compare full offer packages.
+1. **Set your goals.** The first-run `/setup` wizard asks for role direction, cities, salary floor and exclusions. An empty installation does not infer your personal goals.
+2. **Connect a model you can use.** Choose a locally authenticated Codex CLI, a cloud API or a running local model service, then test the exact model and endpoint. You can also start with rules only. Chat subscriptions and API access are different products; see [model setup](docs/models.md).
+3. **Register sources and start.** Add public recruiting sources you are allowed to read. After validation, start scanning configured sources and reviewing matches. No configured sources means no automatic job discovery; this is not unrestricted autonomous web search.
+4. **Keep a verifiable application record.** Enter a self-confirmed summary and optionally register a local PDF path in setup. Harness keeps a private copy and fingerprint; editing JSON is not required. Review the recipient, body and attachment before enabling real outbound sending. Uncertain email results require reconciliation before retrying.
+5. **Continue the conversation.** Review synced or recorded threads with their jobs. Interview times, salary, availability and offers remain your decisions. Automatic replies cover only narrow, preauthorized requests supported by the channel.
 
-![The running Jobs screen with a fictional posting and match details](docs/assets/demo-jobs.jpg)
+![Recruiter thread with fictional application and interview invitation](docs/assets/demo-inbox.jpg)
 
-*The offline demo uses fictional job listings and simulated sending.*
+*Actual console screenshot. All demo jobs, messages and receipts are fictional or simulated.*
 
-<a name="ai-install"></a>
+<a name="start"></a>
 
-## Let an AI assistant install it
+## Install and open setup
 
-[Copy the installation prompt](docs/install.en.md#ai-install) into Codex, Claude Code, or Cursor Agent. Your installation assistant sets up the project; the optional runtime integration uses a locally authenticated Codex CLI to review a limited set of job match features. The demo needs only local Python.
+Requires Python 3.9+, SQLite 3.24+ and IANA timezone data. The default runtime uses the Python standard library; no Node.js build is needed.
 
-<a name="quickstart"></a>
-
-## Try it now
-
-Requires macOS or Linux, Python 3.9+, SQLite 3.24+, and IANA timezone data for `Asia/Shanghai`. The current console is in Chinese. The default runtime uses the Python standard library.
+**macOS / Linux**
 
 ```sh
 git clone https://github.com/milkrabbitt/job-search-harness.git
 cd job-search-harness
 ./scripts/doctor.sh
+./scripts/bootstrap.sh
+./scripts/serve.sh
+```
+
+**Windows PowerShell**
+
+```powershell
+git clone https://github.com/milkrabbitt/job-search-harness.git
+cd job-search-harness
+.\scripts\bootstrap.ps1 -InstallTimezone
+.\scripts\doctor.ps1
+.\scripts\serve.ps1
+```
+
+On Windows, `-InstallTimezone` installs timezone data in the selected Python environment.
+
+Open the address shown in the terminal, normally `http://127.0.0.1:8876/setup`. Complete **goals → model → sources → tests → start**. A cloud connection test may incur API charges. Setup needs your actual goals, credentials and sources; an installation assistant cannot invent them.
+
+Keep the process running. Closing the browser does not stop it; press **Ctrl+C** in the terminal to stop. Sleep and shutdown pause work.
+
+[Full installation guide](docs/install.en.md) · [First-run and daily use](docs/onboarding.md) · [Channel requirements](job_harness/CHANNELS.md)
+
+<a name="quickstart"></a>
+
+## Try the offline demo
+
+The demo needs no real résumé, mailbox or model account. Use a separate directory from real data.
+
+macOS / Linux:
+
+```sh
 ./scripts/bootstrap.sh --demo
 ./scripts/serve.sh
 ```
 
-Open the address printed in your terminal, usually `http://127.0.0.1:8876/`. Closing the browser tab leaves the service running. Press **Ctrl+C** in the terminal to stop the foreground process. The default data directory is `.job-harness-dev/`. To use a different directory, set the same `JOB_HARNESS_DATA_DIR` for bootstrap and serve. See [troubleshooting](#troubleshooting) if a port is occupied or a dependency is missing.
+Windows PowerShell:
 
-## What to look for in the demo
+```powershell
+.\scripts\bootstrap.ps1 -Demo
+.\scripts\serve.ps1
+```
 
-- Open 「岗位」 (Jobs) to inspect the source link, salary range when listed, match reasons, and gaps in the job description.
-- Open 「草稿与发送」 (Drafts and sending) to review a fictional application, its approved résumé, and the simulated send receipt. With real email configured, uncertain sends stay pending verification by Message-ID.
-- Open a thread under 「招聘消息」 (Recruiter messages), then look in 「待我决定」 (Decisions) for the interview scheduling request.
+The default data directory is `.job-harness-dev/`. For real use, set the same `JOB_HARNESS_DATA_DIR` outside the repository when initializing and starting the service.
 
-## Use your own data and accounts
+## What is supported
 
-Choose a separate private data directory and omit `--demo` when initializing. Use 「资料与设置」 (Profile and settings) to set preferences and add verified public job sources. To add personal facts and register an approved local PDF, follow the [fictional profile](examples/profile.example.json) and import your own private JSON with `python3 -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" init --inheritance /path/to/profile.json`. In the private JSON, add each approved résumé under `resumes` with `path`, `label`, `scope`, `sha256`, and `approved: true`. The SHA-256 value must match the local PDF before it can be used. See the [configuration template](examples/config.example.json) for channel settings.
-
-The built-in matching preset focuses on Chinese JDs for AI applications, product, robotics, and financial products. Set your own cities, role terms, salary floor, exclusions, and sending rules. Work arrangement and employment type notes are for manual review. Other industries can still be tracked manually.
-
-| Channel | What is available |
+| Integration | Current scope |
 | --- | --- |
-| Company websites | Read registered, accessible public job sources. Submit official application forms on the original site. |
-| NetEase 126 Mail | On macOS with Keychain configured, check recruiting email, prepare threaded replies, send approved applications, and verify sending. With automatic sending enabled, eligible requests for a résumé, public portfolio, or a brief answer based on a verified fact can receive a reply in a trusted thread. |
-| Liepin | With candidate authorization configured, search for jobs and check public details. Chat and submissions use browser handoff. |
-| BOSS Zhipin and Yupao | Queue and deduplicate platform actions, then record evidence. Complete the action in your logged-in browser. |
-| Optional runtime model | A local Codex CLI can review a limited set of match features. The workbench controls authorization and sending. |
+| Codex CLI | Uses a locally authenticated CLI and an available model to review match features. CLI parameter compatibility is required. |
+| OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Moonshot, Zhipu, MiniMax | API adapters are implemented. Supply your own available model name, account access and regional endpoint. |
+| Ollama, LM Studio | Connect to a local service you have started with a model loaded. Harness does not download models for you. |
+| OpenAI-compatible | A compatible API adapter; not a claim that every third-party service has been live-tested. |
+| Company websites | Read registered and accessible public recruiting sources. Submit application forms on the original site. |
+| NetEase 126 and authorized Liepin search | Credential integration currently requires **macOS Keychain**. Windows/Linux core support does not enable these full channels. |
+| BOSS Zhipin, Liepin chat, Yupao | Queue actions, check duplicates and retain evidence. A human completes site actions in a logged-in browser. |
 
-See the [channel setup and dependency guide](job_harness/CHANNELS.md) for credentials and troubleshooting. Enable real outbound sending after verifying your account, authorization, and application materials.
+Adapters are implemented and covered by simulated protocol tests. Those tests do not establish live access to every provider, model or region. Complete a connection test using your own account before enabling an integration. See the [provider matrix](docs/models.md).
 
-<a name="troubleshooting"></a>
+New users default to general screening based on their own role keywords, cities, salary floor and exclusions. The older AI application, product, robotics and financial-product preset remains an optional compatibility mode. Model review is advisory, not an acceptance probability or complete skill assessment. Unlisted salary stays unknown; full offer-package comparison is not implemented. Register a summary and PDF through setup, or import multiple facts and versions through a [private profile file](examples/profile.example.json). PDF work-history extraction is not implemented.
 
-## Troubleshooting
+## Before using real data
 
-[Full diagnostics, service management and backup instructions](docs/troubleshooting.md).
+- **Control calls, not an assumed bill.** Set a daily call limit and timeout. HTTP APIs also have an output-token cap; that field does not cap Codex CLI output. Reliable dollar accounting is not implemented; a nonempty currency budget blocks calls rather than pretending to enforce a price limit.
+- **Local files are not encrypted.** Model keys can come from environment variables or the data directory's `private/model-keys/`. POSIX permissions are restricted; Windows relies on your user directory's access controls. Never share or commit these files.
+- **Cloud review sends limited match features to the provider.** A local console does not imply local inference. Verify the backend of your local model service too.
+- **Database backups exclude model keys.** Reconfigure credentials and test after restoring. Keep original résumé files separately. Retest after changing model, endpoint or key.
+- **Starting scans does not authorize sending.** Outbound messages still require their own controls, verified materials and channel authorization.
 
-- **Port in use.** If the same instance is already running, open its console. To run a second instance, use a separate data directory and set a free port in its `config.json`.
-- **Missing timezone data.** Install your system’s `tzdata` package or run `python -m pip install tzdata` inside the chosen virtual environment.
-- **Authorization or access problem.** Check the channel status and error on the dashboard. Complete any login or verification on the provider’s site and check your local configuration against the [channel setup and dependency guide](job_harness/CHANNELS.md).
+[Pause, reconfigure, back up and uninstall](docs/onboarding.md#maintenance) · [Troubleshooting](docs/troubleshooting.md)
 
-## Running, privacy, and backups
+<a name="ai-install"></a>
 
-- **Runs locally.** The console listens on the loopback address. On macOS, the `install` subcommand installs a LaunchAgent for the current user, which can be managed with `start`, `status`, and `stop`. Linux supports foreground operation. Tasks pause when the computer sleeps or shuts down.
-- **Separate controls for tasks and outbound sending.** Pause outbound actions while job discovery and inbox checks continue. Pause background tasks to stop scheduling.
-- **Private data stays under your control.** Keep SQLite data, résumés, and backups outside the repository. Real channel credentials are stored in the system Keychain. Any enabled external channel receives the material you send through it.
-- **Back up and restore.** Back up from the console or run `python3 -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" backup`. Stop the instance before running `restore /path/to/backup.sqlite3` with the same data directory. Check sending evidence before resuming outbound actions after a restore.
+## Let your coding assistant install it
+
+Give the [installation prompt](docs/install.en.md#ai-install) to a terminal-capable assistant such as Codex, Claude Code or Cursor Agent. Installation and runtime model choice are separate. Enter secrets locally, never in the conversation.
 
 <a name="tests"></a>
 
-## Tests
-
-Local tests exercise matching, deduplication, stale drafts, attachment checks, pause controls, and sending recovery with temporary databases, fictional data, and simulated channels.
+## Verification and feedback
 
 ```sh
 python3 -B -m unittest discover -s tests -v
 ```
 
-To report a bug or suggest an improvement, [open an issue](https://github.com/milkrabbitt/job-search-harness/issues) with a fictional example.
+Automation covers core workflows, model protocols, configuration boundaries and simulated sending. Check actual cross-platform results in [GitHub Actions](https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml). Live provider accounts, mail delivery and website login require verification in the user's own environment.
 
-Released under the [MIT license](LICENSE).
+[MIT licensed](LICENSE). [Report issues](https://github.com/milkrabbitt/job-search-harness/issues) using fictional data; do not upload résumés, recruiting messages, secret configuration or private logs.

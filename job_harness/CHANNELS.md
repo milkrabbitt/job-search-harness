@@ -1,8 +1,24 @@
 # 渠道和运行依赖
 
-基础运行需要 CPython 3.9 或更新版本、SQLite 3.24 或更新版本，以及包含 `Asia/Shanghai` 的 IANA 时区数据库。Python 的 `sqlite3`、`ssl`、`zoneinfo` 和 `fcntl` 模块随常见的 macOS／Linux 构建提供。HTTPS 和邮箱连接使用 Python 可见的系统信任库。前端的 HTML、CSS、JavaScript 都由 `console.py` 提供，浏览器直接访问本机控制台即可。没有 Node.js 构建步骤或 CDN 依赖。
+[安装](../docs/install.md) · [首次配置](../docs/onboarding.md) · [模型接入](../docs/models.md)
 
-macOS 的后台安装使用系统 `launchctl` 生成并加载当前用户的 LaunchAgent。通知依赖 `osascript` 和当前用户的通知权限。桌面入口由 `osacompile` 生成，使用 `codesign` 签名，打开控制台使用 `open`。这些组件随 macOS 提供。Linux 等 POSIX 环境使用 `serve` 前台启动，原生 Windows 不支持 `fcntl` 文件锁。实际邮件收发和猎聘授权搜索使用 macOS 登录钥匙串。
+基础运行需要 Python 3.9+、SQLite 3.24+，以及包含 `Asia/Shanghai` 的 IANA 时区数据。控制台目前为中文，调度时间沿用上海时区。Python 需提供 `sqlite3`、`ssl` 和 `zoneinfo`；文件锁在 POSIX 使用 `fcntl`，Windows 使用 `msvcrt`。默认运行只使用标准库；缺时区数据时可安装 `tzdata`。前端由 `console.py` 提供，无需 Node.js 构建或 CDN。
+
+## 操作系统支持
+
+| 能力 | macOS | Linux | Windows |
+| --- | --- | --- | --- |
+| 本机控制台、首次配置、规则筛选、任务与记录 | 支持 | 支持 | 支持 |
+| 云 API 和本机模型服务适配 | 支持；需本人测试服务 | 支持；需本人测试服务 | 支持；需本人测试服务 |
+| 公开招聘来源读取 | 支持允许访问且解析器支持的来源 | 同左 | 同左 |
+| 126 邮箱与猎聘授权搜索凭据 | macOS 钥匙串 | 未提供同等凭据接入 | 未提供同等凭据接入 |
+| LaunchAgent、原生通知、桌面入口 | 支持 | 不支持；前台运行 | 不支持；前台运行 |
+
+平台矩阵描述已实现的能力。自动化结果以 [GitHub Actions](https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml) 为准；测试不会替你登录真实供应商、邮箱或招聘网站。
+
+macOS 后台安装使用 `launchctl`，通知使用 `osascript`，桌面入口使用 `osacompile`、`codesign` 和 `open`。Windows / Linux 默认使用 `serve` 前台运行，安装脚本不会自动注册开机服务。电脑休眠或关机时任务不会继续。
+
+首次非演示安装从 `/setup` 填求职条件、选择并测试模型（或明确不使用模型）、登记来源，再核对并开始。来源保存只校验结构，首次扫描才检验网络和解析。自动扫描仅针对已经配置的来源，不代表能自主遍历全网。启动扫描与开启外发是两件事。
 
 ## 网易 126 邮箱
 
@@ -31,6 +47,14 @@ BOSS 直聘、猎聘和鱼泡的站内动作使用操作者已登录的正常网
 
 命令包含 `browser-queue`、`browser-actions`、`browser-claim`、`browser-check`、`browser-finish` 和 `browser-reconcile`。运行 `python3 -B -m job_harness <命令> --help` 查看参数。若使用独立数据目录，`--data-dir` 放在子命令之前。
 
-## 可选模型
+## 模型接入
 
-模型复核可调用已经在本机登录的 Codex CLI。程序按 `model.executable`、PATH 中的 `codex`、macOS ChatGPT 应用的内置路径依次寻找可执行文件。接入需要支持源码所用参数的 CLI 版本。模型调用仅接收有限的岗位匹配特征，外发判断留在本地。基础调度和单元测试不依赖 Codex CLI。
+当前适配 Codex CLI、OpenAI、Anthropic、Gemini、DeepSeek、Qwen、Moonshot、Zhipu、MiniMax、Ollama、LM Studio 和 OpenAI-compatible。每个 API 模型名由用户根据自己的账号或本机服务填写；没有默认承诺可用的模型。详见[供应商矩阵、端点、限额与密钥说明](../docs/models.md)。
+
+- Codex CLI 使用本机已认证的可执行文件；可在设置中指定路径。CLI 参数兼容性和实际账号额度需本机连接测试。
+- 云端适配器发送有限的结构化匹配特征；不发送完整简历、招聘聊天或原始 JD。连接测试使用合成输入，仍可能收费。
+- Ollama / LM Studio 由用户先启动并加载模型，工作台只连接其回环 API。明文 HTTP 仅用于回环；外部端点必须 HTTPS，接口不跟随重定向。
+- API Key 可从环境变量读取，或保存在私有数据目录 `private/model-keys/` 的未加密文件中。它们与 **126 / 猎聘使用的 macOS 钥匙串是不同存储方式**，不会随数据库备份恢复。
+- 基础规则筛选、离线演示和模拟测试不需要真实模型账号。模型复核只提供建议，不能代替外发授权或用户对面试、薪资与 Offer 的决定。
+
+适配与协议测试不等于全部真实供应商端到端验证。首次使用、切换模型或凭据后，均需由使用者在本机完成连接测试。

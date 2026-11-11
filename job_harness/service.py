@@ -94,6 +94,12 @@ class Harness:
     def preferences(self, c):
         return {**DEFAULTS, **setting(c, "preferences", {})}
 
+    def email_enabled(self):
+        """Unconfigured fresh installs should not repeatedly probe a disabled mailbox."""
+        config = self.config.get("email", {})
+        return bool(self.adapters.get("email") and config.get("enabled", True)
+                    and getattr(self.adapters.get("email"), "enabled", True))
+
     def event(self, c, message, channel=None, level="info", key=None):
         c.execute("INSERT OR IGNORE INTO events(created_at,level,channel,message,event_key) VALUES(?,?,?,?,?)",
                   (stamp(), level, channel, str(message)[:1000], key))
@@ -131,6 +137,7 @@ class Harness:
         return len(records)
 
     def recover(self):
+        from .onboarding import required
         with self.store.tx(True) as c:
             for row in fetch(c, "SELECT id,channel FROM outbox WHERE state='sending'"):
                 c.execute("UPDATE outbox SET state='unknown',updated_at=?,evidence=? WHERE id=?",
@@ -138,13 +145,21 @@ class Harness:
                 self.enqueue(c, "reconcile", row["channel"], "recover:" + str(row["id"]), payload={"id": row["id"]})
             c.execute("""UPDATE tasks SET state='stopped',cancelled=1,detail='旧周期已过，等待下一轮'
                 WHERE state='queued' AND kind IN ('replies','scan') AND due_at<?""", (shift(-24 * 3600),))
-            c.execute("UPDATE tasks SET state=CASE WHEN cancelled=1 THEN 'stopped' ELSE 'queued' END,updated_at=? WHERE state='running'", (stamp(),))
+            c.execute("""UPDATE tasks SET state=CASE WHEN cancelled=1 THEN 'stopped'
+                WHEN kind='model_probe' THEN 'failed' ELSE 'queued' END,
+                detail=CASE WHEN kind='model_probe' THEN '进程退出，模型调用结果不明；如需重试请手动确认' ELSE detail END,
+                updated_at=? WHERE state='running'""", (stamp(),))
             c.execute("UPDATE model_runs SET state='failed',detail='进程退出，模型调用结果未记账' WHERE state='running'")
+            interrupted_test = setting(c, "model_test", {})
+            if interrupted_test.get("state") == "running":
+                set_setting(c, "model_test", {**interrupted_test, "state": "failed",
+                    "detail": "服务重启中断了连接测试，请重新测试", "updated_at": stamp()})
             self.event(c, "后台启动，恢复任务与未核实发送")
-            self.enqueue(c, "probe", "email", "probe:email:" + now().strftime("%Y%m%d%H"))
-            if not one(c, "SELECT id FROM tasks WHERE dedupe_key LIKE 'bootstrap:%'"):
+            if self.email_enabled() and not required(c):
+                self.enqueue(c, "probe", "email", "probe:email:" + now().strftime("%Y%m%d%H"))
+            if not setting(c, "onboarding_required", False) and not one(c, "SELECT id FROM tasks WHERE dedupe_key LIKE 'bootstrap:%'"):
                 self.enqueue(c, "scan", "official", "bootstrap:first")
-            if self.adapters.get("liepin") and not one(c, "SELECT id FROM tasks WHERE dedupe_key='liepin:official-connectivity'"):
+            if not required(c) and self.adapters.get("liepin") and not one(c, "SELECT id FROM tasks WHERE dedupe_key='liepin:official-connectivity'"):
                 self.enqueue(c, "probe", "liepin", "liepin:official-connectivity")
 
     def employer(self, c, company, channel, domain=None, employer_external_id=None, source=None):
@@ -373,6 +388,13 @@ class Harness:
         return rules.assess(job, prefs, exclusions, review_cleared=bool(reviewed and reviewed["state"] == "cleared"))
 
     def template(self, c, job, match):
+        if match["scope"] == "general":
+            fact = self.verified_fact(c, "summary_general")
+            if not fact:
+                return None
+            next_step = "希望有机会进一步沟通。" if job["status"] in rules.RECRUITING else RECRUITING_QUESTION
+            return ("您好，我想申请贵司的" + job["title"] + "。" + fact
+                    + next_step + "附件是我的求职简历，谢谢。")
         if match["scope"] == "finance":
             fact = self.verified_fact(c, "summary_finance")
             portfolio = None
@@ -664,7 +686,8 @@ class Harness:
 
     @staticmethod
     def outbound_enabled(c):
-        return not any(setting(c, key, False) for key in ("demo_fixture", "outbound_paused", "stopped"))
+        from .onboarding import required
+        return not required(c) and not any(setting(c, key, False) for key in ("demo_fixture", "outbound_paused", "stopped"))
 
     @staticmethod
     def send_once_authorization(c):
@@ -1028,9 +1051,10 @@ class Harness:
                 auto=prefs["auto_send"], in_reply_to=anchor["message_id"], refs=[anchor["message_id"]])
 
     def schedule(self):
+        from .onboarding import required
         ts = now()
         with self.store.tx(True) as c:
-            if setting(c, "stopped", False):
+            if setting(c, "stopped", False) or required(c):
                 return
             prefs = self.preferences(c)
             email = one(c, "SELECT * FROM channels WHERE name='email'")
@@ -1042,11 +1066,11 @@ class Harness:
                     ORDER BY state='running' DESC,due_at LIMIT 1""")
             next_probe = ts.replace(minute=0, second=0) + timedelta(hours=1)
             next_email = None
-            if not email["paused"]:
+            if self.email_enabled() and not email["paused"]:
                 next_email = active_read["due_at"] if active_read and active_read["state"] == "queued" else (
                     max(ts, due_read).isoformat() if email["status"] in {"ready","read_only"} else next_probe.isoformat())
             c.execute("UPDATE channels SET next_check=? WHERE name='email'", (next_email,))
-            if not email["paused"] and not active_read:
+            if self.email_enabled() and not email["paused"] and not active_read:
                 if email["status"] in {"ready", "read_only"}:
                     if ts >= due_read:
                         self.enqueue(c, "replies", "email", "replies:" + (previous_read or "baseline"))
@@ -1064,12 +1088,13 @@ class Harness:
                 c.execute("UPDATE channels SET next_check=? WHERE name='liepin'", (upcoming,))
             if last_slot and (prefs["send_anytime"] or rules.is_business_day(ts)):
                 scheduled = datetime.fromisoformat(ts.date().isoformat() + "T" + last_slot).replace(tzinfo=TZ)
-                if ts - scheduled < timedelta(minutes=75):
+                if (ts - scheduled < timedelta(minutes=75)
+                        and scheduled.isoformat() > setting(c, "onboarding_completed_at", "")):
                     if not official["paused"]:
                         self.enqueue(c, "scan", "official", "scan:" + scheduled.isoformat())
                     if self.adapters.get("liepin") and liepin["status"] == "read_only" and not liepin["paused"]:
                         self.enqueue(c, "platform_search", "liepin", "liepin:search:" + scheduled.isoformat())
-            if email["status"] == "ready" and not email["paused"]:
+            if self.email_enabled() and email["status"] == "ready" and not email["paused"]:
                 self.followups(c)
             for row in fetch(c, """SELECT id,kind FROM decisions WHERE state='pending' AND due_at IS NOT NULL
                                   AND due_at BETWEEN ? AND ?""", (stamp(), shift(86400))):
@@ -1106,15 +1131,25 @@ class Harness:
             raise
         with self.store.tx(True) as c:
             count = draft_count = 0
+            from .onboarding import effective_model_config
+            try:
+                model_config = effective_model_config(self, c)
+            except ValueError:
+                model_config = {"enabled": False, "provider": "none"}
+            configured_model = (setting(c, "onboarding_complete", False) and model_config["enabled"]
+                                and model_config["provider"] != "none")
+            legacy_review = not setting(c, "onboarding_required", False)
             for data in found:
                 jid = self.upsert_job(c, data)
                 count += 1
-                if self.prepare(c, jid, origin_task_id=payload.get("task_id")):
+                prepared = self.prepare(c, jid, origin_task_id=payload.get("task_id"))
+                if prepared:
                     draft_count += 1
-                elif data.get("recipient") and data.get("requirements"):
+                if configured_model or (legacy_review and data.get("recipient") and data.get("requirements") and not prepared):
                     job = one(c, "SELECT match_json FROM jobs WHERE id=?", (jid,))
                     assessment = json.loads(job["match_json"])
-                    if assessment["state"] == "review" and assessment["score"] >= 60:
+                    if (assessment["state"] in ({"match", "review"} if configured_model else {"review"})
+                            and assessment["score"] >= 60):
                         self.enqueue(c, "model_probe", "model", "review-job:" + str(jid) + ":" + now().date().isoformat(),
                                      payload={"job_id": jid})
             result = "读取 " + str(count) + " 条 · 生成 " + str(draft_count) + " 项候选外发"
@@ -1250,8 +1285,9 @@ class Harness:
 
     def task_one(self):
         from .channels import ChannelUnavailable
+        from .onboarding import required
         with self.store.tx(True) as c:
-            if setting(c, "stopped", False):
+            if setting(c, "stopped", False) or required(c):
                 return False
             row = one(c, """SELECT t.* FROM tasks t LEFT JOIN channels ch ON ch.name=t.channel
                 WHERE t.state='queued' AND t.cancelled=0 AND t.due_at<=? AND (COALESCE(ch.paused,0)=0 OR t.kind IN ('probe','reconcile','verify_sent','mail_audit'))
@@ -1310,10 +1346,8 @@ class Harness:
                 detail = self.verify_sent(payload["id"], row["id"])
             elif kind == "model_probe":
                 model_state, detail = self.invoke_model_probe(payload.get("job_id"))
-                if model_state == "failed":
+                if model_state != "done":
                     state = "failed"
-                    if "超时" in detail and row["attempts"] < 2:
-                        state, due = "queued", shift(120 * (row["attempts"] + 1))
             else:
                 state, detail = "failed", "未识别的后台任务"
         except ChannelUnavailable as exc:
@@ -1370,27 +1404,89 @@ class Harness:
             self.wake.wait(3)
             self.wake.clear()
 
-    def invoke_model_probe(self, job_id=None):
+    def invoke_model_probe(self, job_id=None, *, setup=False):
+        from .model_backends import build_model
+        from .model_credentials import read_model_key
+        from .onboarding import config_hash, effective_model_config, required, safe_model_text
+        # Reserve budget in a short write transaction. Never hold it during a provider call.
         with self.store.tx(True) as c:
-            config = {**{"name": "", "max_calls": 3, "timeout": 75, "cost_limit": ""},
-                      **setting(c, "model_config", {})}
-            used = c.execute("SELECT count(*) FROM model_runs WHERE substr(created_at,1,10)=?", (now().date().isoformat(),)).fetchone()[0]
-            if not self.model or used >= config["max_calls"] or config["cost_limit"] not in ("", None):
-                return "held", "模型已禁用、达到调用上限，或真实费用不可用而启用了费用上限"
+            try:
+                config = effective_model_config(self, c)
+            except ValueError as exc:
+                return "failed", str(exc)
+            digest = config_hash(self, config)
+            held = ""
+            if not config["enabled"] or config["provider"] == "none":
+                held = "模型未启用；保存模型设置，或明确选择规则筛选模式"
+            elif not setup and required(c):
+                held = "首次配置尚未完成；请先测试连接并点击开始工作"
+            elif not setup and setting(c, "onboarding_required", False) and (
+                    setting(c, "model_test", {}).get("state") != "done"
+                    or setting(c, "model_test", {}).get("config_hash") != digest):
+                held = "当前模型或凭据尚未通过连接测试；请在配置页重新测试"
+            elif config["cost_limit"] not in ("", None):
+                held = "真实费用未知，已按金额预算暂停调用；清空金额上限并设置每日调用次数后再测试"
+            used = c.execute("SELECT count(*) FROM model_runs WHERE substr(created_at,1,10)=?",
+                             (now().date().isoformat(),)).fetchone()[0]
+            if not held and used >= config["max_calls"]:
+                held = "已达到每日模型调用上限；等待次日或调整每日次数。失败与测试调用也计入上限"
+            previous_test = setting(c, "model_test", {})
+            if setup and previous_test.get("state") == "running" and previous_test.get("config_hash") == digest:
+                return "held", "此配置的连接测试正在运行，请等待结果"
+            if held:
+                if setup:
+                    set_setting(c, "model_test", {"state": "held", "detail": held,
+                                                  "config_hash": digest, "updated_at": stamp()})
+                return "held", held
             job = one(c, "SELECT match_json FROM jobs WHERE id=?", (job_id,)) if job_id else None
             info = json.loads(job["match_json"]) if job else None
             mid = c.execute("INSERT INTO model_runs(created_at,model,state) VALUES(?,?,'running')",
                             (stamp(), config["name"] or "CLI 默认")).lastrowid
-        result = self.model.evaluate(config, info)
+            if setup:
+                set_setting(c, "model_test", {"state": "running", "detail": "正在使用虚构样例验证连接与结构化输出",
+                                              "config_hash": digest, "run_id": mid, "updated_at": stamp()})
+            base = self.config.get("model", {})
+            saved = setting(c, "model_config", {})
+            use_injected = self.model is not None and "provider" not in base and "provider" not in saved
+        try:
+            original_key = read_model_key(self.store.root, config)
+            adapter = self.model if use_injected else build_model(config, self.store.root)
+            result = adapter.evaluate(config, info) if adapter else {
+                "state": "failed", "model": config["name"], "detail": "当前模型配置未启用"}
+            if not isinstance(result, dict) or result.get("state") not in {"done", "failed"}:
+                raise ValueError("invalid adapter result")
+            result = dict(result)
+            if original_key:
+                for key in ("model", "detail"):
+                    result[key] = str(result.get(key) or "").replace(original_key, "[凭据已隐藏]")
+            result = {**result, "model": safe_model_text(self, config, result.get("model") or config["name"], 200),
+                      "detail": safe_model_text(self, config, result.get("detail"))}
+        except Exception:
+            result = {"state": "failed", "model": config["name"] or config["provider"],
+                      "detail": "模型调用失败；请检查模型名称、服务地址、凭据与本地服务，再手动重试"}
         with self.store.tx(True) as c:
             c.execute("""UPDATE model_runs SET model=?,state=?,detail=?,input_tokens=?,output_tokens=? WHERE id=?""",
                       (result["model"], result["state"], result["detail"], result.get("input_tokens"),
                        result.get("output_tokens"), mid))
-            if job_id and result["state"] == "done":
+            try:
+                current_digest = config_hash(self, effective_model_config(self, c))
+            except ValueError:
+                current_digest = ""
+            applied = not setup
+            if setup:
+                current_test = setting(c, "model_test", {})
+                if current_test.get("run_id") == mid and current_digest == digest:
+                    applied = True
+                    set_setting(c, "model_test", {"state": result["state"], "detail": result["detail"],
+                        "config_hash": digest, "run_id": mid, "updated_at": stamp()})
+                    self.event(c, "模型连接测试 · " + ("通过" if result["state"] == "done" else "未通过"))
+            if job_id and result["state"] == "done" and current_digest == digest:
                 current = one(c, "SELECT match_json FROM jobs WHERE id=?", (job_id,))
                 if current and json.loads(current["match_json"]) == info:
                     info["model_advice"] = result["detail"]
                     c.execute("UPDATE jobs SET match_json=? WHERE id=?", (dump(info), job_id))
+        if setup and not applied:
+            return "held", "测试期间设置或凭据已变更，此结果不再适用；请测试当前配置"
         return result["state"], result["detail"]
 
     def set_employer_followup(self, c, data):
@@ -1428,6 +1524,9 @@ class Harness:
     def action(self, name, data):
         data = dict(data)
         notice = "操作已保存"
+        if name.startswith("setup_"):
+            from .onboarding import handle_action
+            return handle_action(self, name, data)
         if name == "backup":
             return "已创建备份 " + self.store.backup().name
         with self.store.tx(True) as c:
@@ -1435,6 +1534,10 @@ class Harness:
             if name in {"pause_channel", "resume_channel", "scan"} and channel not in CHANNELS:
                 raise ValueError("未知渠道")
             if name in {"pause_all", "resume_all", "stop", "run"}:
+                if name in {"run", "resume_all"}:
+                    from .onboarding import required
+                    if required(c):
+                        raise ValueError("请先完成首次配置并点击开始工作")
                 if name in {"pause_all", "resume_all"}:
                     set_setting(c, "outbound_paused", name == "pause_all")
                 if name in {"stop", "run"}:
@@ -1535,6 +1638,11 @@ class Harness:
                         notice = "已保存决定并生成待批准的回复草稿"
             elif name == "preferences":
                 prefs = self.preferences(c)
+                if "matching_preset" in data:
+                    preset = str(data["matching_preset"])
+                    if preset not in {"general", "legacy_ai_application"}:
+                        raise ValueError("请选择通用筛选或既有 AI 应用筛选规则")
+                    prefs["matching_preset"] = preset
                 previously_allowed = prefs["allow_unknown_recruiting"]
                 was_sending_anytime = prefs["send_anytime"]
                 for key in ("target_scope", "cities", "directions", "work_arrangement", "work_types", "salary_floor"):
@@ -1644,17 +1752,22 @@ class Harness:
                 notice = "已保存人工核验结果并阻止重复外联"
             elif name in {"set_model", "model_probe", "model_match"}:
                 if name == "set_model":
-                    model_name = str(data.get("model_name") or "").strip()
-                    calls, timeout = int(data.get("max_calls") or 0), int(data.get("timeout") or 75)
-                    cost = str(data.get("cost_limit") or "").strip()
-                    if ((model_name and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", model_name))
-                            or not 0 <= calls <= 30 or not 20 <= timeout <= 180
-                            or (cost and not re.fullmatch(r"\d+(\.\d{1,4})?", cost))):
-                        raise ValueError("模型设置不合法")
-                    set_setting(c, "model_config", {"name": model_name, "max_calls": calls, "timeout": timeout, "cost_limit": cost})
-                jid = int(data.get("job_id") or 0) if name == "model_match" else None
-                self.enqueue(c, "model_probe", "model", "model:" + uuid.uuid4().hex, payload={"job_id": jid})
-                notice = "已安排 CLI 模型调用"
+                    from .model_backends import normalize_model_config
+                    from .onboarding import effective_model_config, invalidate
+                    config = effective_model_config(self, c)
+                    config.update({key: data[key] for key in ("max_calls", "timeout", "max_output_tokens", "cost_limit") if key in data})
+                    if "model_name" in data:
+                        config["name"] = str(data["model_name"]).strip()
+                    set_setting(c, "model_config", normalize_model_config(config))
+                    invalidate(c)
+                    if setting(c, "onboarding_required", False):
+                        from .onboarding import _pause_for_setup
+                        _pause_for_setup(c)
+                    notice = "模型设置已保存；测试连接时才会调用模型"
+                else:
+                    jid = int(data.get("job_id") or 0) if name == "model_match" else None
+                    self.enqueue(c, "model_probe", "model", "model:" + uuid.uuid4().hex, payload={"job_id": jid})
+                    notice = "已安排模型调用；计入每日调用上限"
             else:
                 raise ValueError("此操作不存在")
             self.event(c, "控制台 · " + notice, channel if channel in CHANNELS else None)
@@ -1754,7 +1867,8 @@ class Harness:
                         FROM messages m LEFT JOIN mail_audits a ON m.id=a.message_id
                         LEFT JOIN platform_message_sources p ON m.id=p.message_id
                         WHERE m.thread_id=? ORDER BY m.occurred_at,m.id""", (thread["id"],))
-            model_conf = {**{"name": "", "max_calls": 3, "timeout": 75, "cost_limit": ""}, **setting(c, "model_config", {})}
+            from .onboarding import snapshot as onboarding_snapshot
+            onboarding, model_conf = onboarding_snapshot(self, c)
             model_last = one(c, "SELECT * FROM model_runs ORDER BY id DESC LIMIT 1")
             calls = c.execute("SELECT count(*) FROM model_runs WHERE substr(created_at,1,10)=?", (today,)).fetchone()[0]
             config = self.preferences(c)
@@ -1791,10 +1905,12 @@ class Harness:
                 "tasks": fetch(c, "SELECT * FROM tasks ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,id DESC LIMIT 90"),
                 "task_steps": fetch(c, "SELECT * FROM task_steps ORDER BY id DESC LIMIT 650"),
                 "events": fetch(c, "SELECT * FROM events ORDER BY id DESC LIMIT 180"),
-                "model": {**model_conf, "adapter": "Codex CLI", "configured_name": model_conf["name"],
-                          "name": model_conf["name"] or (model_last["model"] if model_last else "CLI 默认，待核验"),
-                          "status": model_last["state"] if model_last else "unverified", "calls_today": calls,
-                          "cost": "未知", "detail": model_last["detail"] if model_last else "未运行实际调用",
+                "onboarding": onboarding,
+                "model": {**model_conf,
+                          "name": "规则筛选模式" if model_conf["provider"] == "none" else
+                          model_conf["name"] or (model_last["model"] if model_last else "CLI 默认，待核验"),
+                          "status": model_conf["status"] if onboarding["required"] or not model_last else model_last["state"], "calls_today": calls,
+                          "detail": model_conf["detail"] if onboarding["required"] or not model_last else model_last["detail"],
                           "input_tokens": model_last["input_tokens"] if model_last else None,
                           "output_tokens": model_last["output_tokens"] if model_last else None},
             }

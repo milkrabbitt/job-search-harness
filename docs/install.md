@@ -2,54 +2,147 @@
 
 [返回首页](../README.md) · [English](install.en.md)
 
+安装完成后，程序仍需要你的求职条件、可用模型和招聘来源。可以先跑离线演示，也可以直接打开首次配置向导。两种数据请分开保存。
+
 <a name="ai-install"></a>
 
-## 让 AI 帮我安装
+## 交给编程助手的安装提示词
 
-复制下面这段，交给 Codex、Claude Code 或 Cursor Agent。你用来安装项目的编程助手，和项目运行时可选的模型，是两个独立角色。体验演示只需要本机 Python。运行时模型复核岗位时，使用已由你在本机登录的 Codex CLI。
+以下提示词适用于能操作本机终端的 Codex、Claude Code、Cursor Agent 等工具。它们帮你安装；运行时可以选择另一家模型服务。
 
 ```text
 请在我的电脑上安装并验证 Job Search Harness。
-仓库 https://github.com/milkrabbitt/job-search-harness
+仓库：https://github.com/milkrabbitt/job-search-harness
 
-1. 克隆到一个新目录，阅读 README 和 job_harness/CHANNELS.md。
-2. 运行 ./scripts/doctor.sh，检查 Python、SQLite、时区数据和可用端口。用 python3 -m venv .venv 创建隔离环境，把 PYTHON_BIN 指向 .venv/bin/python。按 requirements.txt 核对依赖，仅在缺少时区数据时按文档安装。
-3. 运行 ./scripts/bootstrap.sh --demo，再用 ./scripts/serve.sh 启动演示，打开它显示的本机地址。先用虚构数据检查岗位匹配、申请草稿和模拟发送证据、招聘消息与待决定事项。
-4. 用 .venv/bin/python -B -m unittest discover -s tests -v 运行测试。演示和测试期间保持真实账号与外发关闭。
-5. 如果我希望使用运行时模型，检查本机是否已有经我本人登录的 Codex CLI。向我说明这一步是可选的。等我本机完成认证后，在独立的非演示数据目录中将 config.json 的 model.enabled 设为 true，必要时设置 model.executable，重启该实例。然后在控制台“资料与设置”配置实际可用的模型、调用上限与超时，并安排模型检查。
-6. 把实际验证结果、本机地址、数据目录、启动与停止方法告诉我。不要读取或复用已有求职数据。密钥与授权码由我在本机的系统凭据管理器或官方登录流程中配置，禁止粘贴到聊天、写入代码或提交到 Git。
+1. 阅读 README、docs/install.md、docs/models.md、docs/onboarding.md 和 job_harness/CHANNELS.md。检查实际操作系统、Python、SQLite、时区数据和端口，不覆盖已有安装或数据。
+2. 克隆到新目录，创建独立 Python 虚拟环境。按操作系统使用 scripts/doctor.sh 或 scripts/doctor.ps1；将 PYTHON_BIN 指向该虚拟环境的 Python。只安装当前环境确实缺少的依赖，不修改系统的全局执行策略。
+3. 在独立演示数据目录初始化 --demo（PowerShell 为 -Demo），启动服务并验证虚构岗位、申请记录、招聘消息和待决定事项。运行项目测试，演示期间关闭真实账号与外发。
+4. 为真实使用选择仓库外的私有数据目录，设置 JOB_HARNESS_DATA_DIR；不带演示参数初始化并启动。打开 /setup，向我收集求职目标、可用模型和允许读取的招聘来源，不替我猜测。
+5. 向我说明 Codex CLI 登录、云 API 和本机 Ollama/LM Studio 的区别。模型名使用我账号实际可用的名称；本机模型需已加载。API Key 让我在本机向导输入或设置环境变量，不让我贴到聊天，也不写入源码、截图或日志。
+6. 说明模型连接测试可能计费，按我选择的服务进行测试。检查结果与模型、端点一致；测试失败先排查，不把保存配置当成连接成功。不调用我没有提供或授权的真实账号。
+7. 完成向导、登记招聘来源后开始扫描与匹配。真实外发保持关闭；开启邮件、站内提交或自动回复需要单独按我的明确授权设置。
+8. 告诉我实际通过和未通过的检查、本机地址、数据目录、启动和停止命令、调用上限及备份方式。说明电脑休眠后任务会暂停；没有配置来源时无法自动找岗位。
 ```
+
+## 环境要求
+
+- Python 3.9+，包含 `sqlite3`、`ssl`、`zoneinfo`；SQLite 3.24+。
+- IANA 时区数据包含 `Asia/Shanghai`。Windows 或精简系统缺少时，在所用虚拟环境安装 `tzdata`。
+- macOS、Linux 或 Windows PowerShell。Windows 支持核心工作台与模型 API；126 邮箱、猎聘授权搜索的凭据接入仍依赖 macOS 钥匙串。
+- 默认控制台端口 `8876`，仅本机访问。默认运行无需 Node.js、Docker 或前端构建。
+
+跨系统自动化结果见 [CI](https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml)。CI 和模拟协议测试不能验证你自己的模型权限、服务余额、邮箱或招聘平台账号。
 
 <a name="quickstart"></a>
 
-## 立即体验
-
-需要 macOS 或 Linux、Python 3.9+、SQLite 3.24+ 和包含 `Asia/Shanghai` 的 IANA 时区数据。界面当前为中文。默认运行只使用 Python 标准库。
+## macOS / Linux
 
 ```sh
 git clone https://github.com/milkrabbitt/job-search-harness.git
 cd job-search-harness
+python3 -m venv .venv
+export PYTHON_BIN="$PWD/.venv/bin/python"
 ./scripts/doctor.sh
+```
+
+诊断报告缺少时区数据时，使用 `"$PYTHON_BIN" -m pip install tzdata`，然后重新诊断。
+
+先体验演示：
+
+```sh
 ./scripts/bootstrap.sh --demo
 ./scripts/serve.sh
 ```
 
-在浏览器打开终端显示的地址，默认是 `http://127.0.0.1:8876/`。服务运行在当前终端，关掉网页后仍在运行，在终端按 **Ctrl+C** 停止。默认数据放在仓库下独立的 `.job-harness-dev/`。要切换数据目录，给初始化和启动脚本设置同一个 `JOB_HARNESS_DATA_DIR`。遇到端口冲突或缺少依赖，可看 [故障排查](troubleshooting.md)。
-
-
-
-<a name="private-profile"></a>
-
-## 登记自己的资料和简历
-
-1. 在仓库之外建立一个私有资料目录，复制 [虚构资料示例](../examples/profile.example.json)，保存为这个目录下的 `profile.json`。替换其中的虚构内容，只保留自己能确认的经历、项目和公开作品链接。偏好可以在导入后从控制台的「资料与设置」修改。
-2. 将要使用的 PDF 保存在本机，在 `resumes` 中为每份简历登记 `path`（文件的实际路径）、`label`（版本名）、`scope`（适用分类，可选 `ai`、`robotics`、`finance`）、`sha256`（用 `shasum -a 256` 或 `sha256sum` 计算）和 `approved`（确认可以用于投递才填 `true`）。Harness 核验文件和校验值；不会从 PDF 自动提取经历。
-3. 在仓库目录运行下面的命令，把两个示例路径换成自己的私有目录和资料文件。不要复用演示目录。
+真实使用前停止演示，再设置独立目录。下面路径可自行更改：
 
 ```sh
-export JOB_HARNESS_DATA_DIR="/path/to/private-data"
-python3 -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" init --inheritance "$JOB_HARNESS_DATA_DIR/profile.json"
+export JOB_HARNESS_DATA_DIR="$HOME/.local/share/job-search-harness"
+./scripts/bootstrap.sh
 ./scripts/serve.sh
 ```
 
-在开启真实外发前，按[渠道说明](../job_harness/CHANNELS.md)配置账号，并核对本机的资料和简历版本。
+每次重开终端都需要使用相同的 `JOB_HARNESS_DATA_DIR` 和 `PYTHON_BIN`；它们决定使用哪个数据目录和 Python 环境。
+
+## Windows PowerShell
+
+```powershell
+git clone https://github.com/milkrabbitt/job-search-harness.git
+cd job-search-harness
+py -3 -m venv .venv
+$env:PYTHON_BIN = "$PWD\.venv\Scripts\python.exe"
+.\scripts\doctor.ps1
+```
+
+如果没有 `py` 启动器但 `python` 指向 Python 3.9+，使用 `python -m venv .venv`。诊断报告缺少时区数据时，在此环境运行 `& $env:PYTHON_BIN -m pip install tzdata`。
+
+先体验演示：
+
+```powershell
+.\scripts\bootstrap.ps1 -Demo
+.\scripts\serve.ps1
+```
+
+真实使用前停止演示，再设置独立目录：
+
+```powershell
+$env:JOB_HARNESS_DATA_DIR = Join-Path $env:LOCALAPPDATA "JobSearchHarness"
+.\scripts\bootstrap.ps1
+.\scripts\serve.ps1
+```
+
+若 PowerShell 阻止脚本，不必全局关闭执行策略。已经配置好上述 Python 环境后，可以直接运行同一个 Python 入口：
+
+```powershell
+$env:JOB_HARNESS_DATA_DIR = Join-Path $env:LOCALAPPDATA "JobSearchHarness"
+& $env:PYTHON_BIN -B -m job_harness --data-dir $env:JOB_HARNESS_DATA_DIR init --empty
+& $env:PYTHON_BIN -B -m job_harness --data-dir $env:JOB_HARNESS_DATA_DIR serve
+```
+
+如设备管理同时限制 Python，请使用单位允许的安装方式。
+
+## 完成首次配置
+
+打开终端显示的本机地址，进入 `/setup`。向导顺序为：
+
+1. 求职条件：目标方向、城市或远程偏好，可选薪资底线和个人简介。
+2. 模型：选择服务和实际模型名；在本机提供凭据，测试连接。也可明确选择不调用模型。
+3. 来源：登记公开招聘来源。保存时检查 URL 格式；实际可访问性、内容解析和岗位数量由首次扫描确认。
+4. 核对后开始：检查条件、模型与来源，再启动扫描。重复点击开始不会重复创建同一轮启动任务。
+
+开始扫描不会打开真实外发。进度可在控制台查看；失败的来源和模型调用需要排查，不能把“任务已安排”当成已有结果。
+
+服务运行在当前终端。关网页后仍会运行；按 **Ctrl+C** 停止。macOS 另外提供 LaunchAgent，见[渠道说明](../job_harness/CHANNELS.md)。Windows / Linux 的默认安装不会自动注册开机服务。
+
+<a name="private-profile"></a>
+
+## 登记真实资料和简历
+
+推荐直接在 `/setup` 填写自己确认的简介，并在简历表单填写 **运行程序这台电脑上的 PDF 绝对路径、版本名和适用范围**，勾选已经核对且允许该版本用于申请。只接受最大 20 MB 的 PDF；程序会检查文件并保存私有副本和文件指纹，原文件不变。相同内容按指纹去重，重新登记可更新元数据和批准状态。这一步不会发送简历。
+
+简历不是开始扫描的必填项。准备正式申请时，需要匹配适用范围的已批准简历、核实过的事实简介及已核实的收件人。网盘链接不能代替本机文件路径。
+
+### 高级用法：批量导入私有 JSON
+
+需要多条经历、常用回答或多个简历版本时，可使用下面的导入方式；首次安装不必先做这一步。
+
+1. 在仓库外保存一份私有 `profile.json`，参考[虚构资料示例](../examples/profile.example.json)。只填写能确认的经历、常用回答与公开作品链接。
+2. 在 `resumes` 中为批准使用的 PDF 登记 `path`、`label`、`scope`（`general`（通用）、`ai`、`robotics` 或 `finance`）、`sha256` 和 `approved: true`。程序校验文件与哈希，不会从 PDF 自动提取履历。
+3. macOS / Linux 可用 `shasum -a 256` 或 `sha256sum`；Windows 可用 `(Get-FileHash -Algorithm SHA256 'C:\path\resume.pdf').Hash.ToLower()` 计算哈希。
+4. 停止当前实例后导入到同一私有数据目录，再启动并核对资料。
+
+macOS / Linux：
+
+```sh
+"$PYTHON_BIN" -B -m job_harness --data-dir "$JOB_HARNESS_DATA_DIR" init --inheritance /path/to/private/profile.json
+./scripts/serve.sh
+```
+
+Windows：
+
+```powershell
+& $env:PYTHON_BIN -B -m job_harness --data-dir $env:JOB_HARNESS_DATA_DIR init --inheritance C:\path\private\profile.json
+.\scripts\serve.ps1
+```
+
+不要把真实 `profile.json`、PDF、数据库或密钥提交到 Git。模型本地密钥保存在数据目录 `private/model-keys/`，不加密，也不进入数据库备份。详见[模型凭据](models.md#credentials)和[备份与卸载](onboarding.md#maintenance)。

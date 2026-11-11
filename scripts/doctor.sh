@@ -33,12 +33,12 @@ if sys.version_info < (3, 9):
     raise SystemExit("[失败] 需要 Python 3.9 或更新版本。")
 print("[通过] Python " + sys.version.split()[0])
 
-required_modules = ("sqlite3", "zoneinfo", "fcntl", "ssl")
+required_modules = ("sqlite3", "zoneinfo", "msvcrt" if os.name == "nt" else "fcntl", "ssl")
 for name in required_modules:
     try:
         importlib.import_module(name)
     except (ImportError, OSError):
-        raise SystemExit(f"[失败] Python 缺少 {name}。请使用 macOS 或 Linux／WSL 的完整 Python 安装。")
+        raise SystemExit(f"[失败] Python 缺少 {name}。请使用完整的 Python 安装。")
 
 import sqlite3
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -103,17 +103,7 @@ except OSError:
 else:
     print(f"[通过] 本机控制台端口 {port} 可绑定")
 
-model = settings.get("model", {})
-if isinstance(model, dict) and model.get("enabled"):
-    configured = model.get("executable")
-    bundled = Path("/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex")
-    candidate = configured or shutil.which("codex") or bundled
-    if isinstance(candidate, (str, Path)) and Path(candidate).is_file() and os.access(candidate, os.X_OK):
-        print("[可选] 找到 Codex CLI。认证及实际模型调用请在控制台安排模型检查。")
-    else:
-        print("[可选] 已启用模型，但找不到可执行的 Codex CLI。请检查 model.executable。")
-else:
-    print("[可选] 运行时模型未启用，基础功能无需模型。")
+print("[可选] 在控制台开始配置页选择并测试模型；此诊断不会读取密钥或调用模型。")
 
 if sys.platform == "darwin":
     print("[可选] macOS 支持后台服务和钥匙串接入。")

@@ -1,0 +1,53 @@
+name: Publish tested v0.2.0 preview
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-v0.2.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'milkrabbitt/job-search-harness' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the tested commit once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v0.2.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v0.2.0 already exists; preserving the released commit.'
+            exit 0
+          fi
+          notes_file="$RUNNER_TEMP/job-harness-v0.2.0.md"
+          gh api "repos/$GITHUB_REPOSITORY/contents/docs/releases/v0.2.0.md?ref=$TESTED_SHA" \
+            --jq '.content' | base64 --decode > "$notes_file"
+          python3 - "$notes_file" <<'PY'
+          from pathlib import Path
+          import sys
+          text = Path(sys.argv[1]).read_text(encoding='utf-8')
+          assert 1000 < len(text) < 15000
+          assert text.count('```') % 2 == 0
+          assert '虚构' in text and '预览版' in text and '/setup' in text
+          PY
+          gh release create v0.2.0 --repo "$GITHUB_REPOSITORY" \
+            --target "$TESTED_SHA" --prerelease \
+            --title 'v0.2.0 · 接上自己的模型，让求职助手开始工作' \
+            --notes-file "$notes_file"

@@ -26,3 +26,8 @@ config.json
 
 # Isolated Python environments.
 .venv/
+
+# Model credentials and alternate private setup directories.
+**/model-keys/
+*.key
+/.job-harness-live/

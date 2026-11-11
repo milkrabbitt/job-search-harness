@@ -6,11 +6,12 @@
     "work_arrangement": "示例：本地或远程",
     "salary_floor": "",
     "auto_send": false,
-    "allow_follow_up": false
+    "allow_follow_up": false,
+    "matching_preset": "general"
   },
   "facts": [
     {
-      "key": "summary_dialogue",
+      "key": "summary_general",
       "value": "虚构示例：设计过一个对话交互原型，并用合成对话测试功能。",
       "source": "profile.example.json（虚构资料）",
       "state": "verified"

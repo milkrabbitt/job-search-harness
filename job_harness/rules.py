@@ -66,7 +66,131 @@ def similar(left, right):
 def configured_cities(prefs):
     return [city.strip() for city in re.split(r"[,，、\n]+", str(prefs.get("cities") or "")) if city.strip()]
 
+MATCHING_PRESETS = {
+    "general": "通用求职（按目标关键词与明确条件）",
+    "legacy_ai_application": "AI 应用 / 产品历史预设",
+}
+
+
 def assess(job, prefs, exclusions, *, review_cleared=False):
+    """Select a matching policy without silently changing existing profiles.
+
+    New setup explicitly selects ``general``. Profiles without the setting keep
+    the original ``legacy_ai_application`` policy. Scores rank listings against
+    stated preferences; they never establish a candidate's skills or eligibility.
+    """
+    preset = prefs.get("matching_preset", "legacy_ai_application")
+    if not isinstance(preset, str) or preset not in MATCHING_PRESETS:
+        raise ValueError("未知匹配预设，请选择通用求职或 AI 应用 / 产品历史预设")
+    if preset == "general":
+        return _assess_general(job, prefs, exclusions, review_cleared=review_cleared)
+    return _assess_legacy(job, prefs, exclusions, review_cleared=review_cleared)
+
+
+def _general_salary_ceiling(value):
+    """Only compare clearly monthly CNY amounts; never guess FX or annual pay."""
+    text = str(value or "").strip()
+    if re.search(r"\$|€|£|₩|USD|EUR|GBP|KRW|JPY|港币|港元|美元|美金|欧元|英镑|日元|韩元|年薪|/年|每年|年包|annual|year|/时|时薪|每小时|hour|/日|日薪|每天|daily", text, re.I):
+        return None
+    # Accept 8–12K, 8K–12K, 1.2–2万 and explicit 8000–12000元/月.
+    band = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)\s*([kK千万]?)\s*[-–~至]\s*(\d+(?:\.\d+)?)\s*([kK千万])", text)
+    if band:
+        return float(band[3]) * (10000 if band[4] == "万" else 1000)
+    amount = re.search(r"(?<![\d.])(\d+(?:\.\d+)?)\s*([kK千万])", text)
+    if amount:
+        return float(amount[1]) * (10000 if amount[2] == "万" else 1000)
+    if re.search(r"元\s*(?:/\s*月|每月)|月薪|CNY|RMB", text, re.I):
+        numbers = re.findall(r"\d+(?:\.\d+)?", text)
+        if numbers:
+            return max(float(number) for number in numbers[:2])
+    return None
+
+
+def _assess_general(job, prefs, exclusions, *, review_cleared=False):
+    role = str(job.get("title") or "")
+    jd = "\n".join(str(job.get(key) or "") for key in ("title", "description", "requirements"))
+    place = str(job.get("location") or "")
+    hard, unknown, gaps = [], [], []
+    exclusion_fields = " ".join((str(job.get("company") or ""), role, jd))
+    hard.extend("排除名单 " + str(word).strip() for word in exclusions
+                if str(word).strip() and str(word).strip().casefold() in exclusion_fields.casefold())
+    cities = configured_cities(prefs)
+    local_match = any(city.casefold() in place.casefold() for city in cities)
+    remote_match = bool(prefs.get("allow_remote")) and bool(re.search(r"远程|\bremote\b", place, re.I))
+    if place and cities and not (local_match or remote_match):
+        hard.append("工作地点超出当前范围")
+    if job.get("status") in RECRUITING_ENDED:
+        hard.append("岗位关闭或已停止联系")
+    for key, label in (("location", "实际工作地点"), ("salary", "薪资"),
+                       ("requirements", "完整任职要求"), ("description", "具体工作职责"),
+                       ("published_at", "发布时间")):
+        if not job.get(key):
+            unknown.append(label)
+    if job.get("status") not in RECRUITING | RECRUITING_ENDED:
+        unknown.append(UNKNOWN_RECRUITING)
+    salary_floor = str(prefs.get("salary_floor") or "").strip()
+    if salary_floor:
+        if not re.fullmatch(r"\d{1,6}", salary_floor):
+            raise ValueError("薪资底线请填每月人民币数字，或留空")
+        ceiling = _general_salary_ceiling(job.get("salary"))
+        if ceiling is None:
+            unknown.append("薪资能否满足本人明确条件")
+        elif ceiling < int(salary_floor):
+            hard.append("公开薪资上限低于本人确认的底线")
+
+    # Legacy patterns are reminders about the job, never assumed limitations of
+    # the person using the general preset. No verified ability is inferred.
+    review_labels = {
+        "明确销售或获客": "岗位包含销售或获客要求，请核对是否符合你的意愿与经历",
+        "明确算法、训练或底层研发": "岗位包含算法、训练或底层研发要求，请核对相关经历",
+        "机器人本体与底层研发": "岗位包含机器人硬件或底层研发要求，请核对相关经历",
+        "明确强独立编码": "岗位要求独立编码或现场考核，请核对实际能力与考核方式",
+        "明确不接受的工作制": "岗位标注特殊工作制或待命要求，请核对是否接受",
+        "限制行业或发薪": "岗位包含特定行业或支付方式，请核对是否接受",
+        "毕业年份／身份限制": "岗位有毕业年份或在读身份要求，请核对本人是否符合",
+        "必须具备资深同岗经历": "岗位有工作年限要求，请核对本人相关经历",
+        "明确相关理工专业": "岗位有学历或专业要求，请核对本人是否符合",
+    }
+    for label, pattern in {**HARD, **QUALIFICATIONS}.items():
+        if re.search(pattern, jd, re.I):
+            gaps.append(review_labels[label])
+            if label in QUALIFICATIONS and not review_cleared:
+                unknown.append("任职资格是否符合本人实际情况")
+
+    target_keys, seen = [], set()
+    # The setup form accepts either target field. Explicit role keywords take
+    # priority; otherwise treat the user's scope as literal keywords as well.
+    target = str(prefs.get("directions") or "").strip() or str(prefs.get("target_scope") or "").strip()
+    for key in re.split(r"[,，、\n]+", target):
+        key = key.strip()
+        normalized = norm(key)
+        if normalized and normalized not in seen:
+            target_keys.append(key)
+            seen.add(normalized)
+    matches = [key for key in target_keys if norm(key) in norm(jd)]
+    if not target_keys:
+        unknown.append("目标方向尚未设置")
+    elif not matches:
+        unknown.append("目标方向匹配")
+    strengths = ["目标关键词：" + key for key in matches]
+    evidence = len(norm(job.get("description"))) >= 24 and len(norm(job.get("requirements"))) >= 12
+    priority = (min(90, 50 + round(30 * len(matches) / len(target_keys)) + (10 if evidence else 0))
+                if matches else (10 if evidence else 0))
+    nonblocking = {"发布时间", "薪资"}
+    if prefs.get("allow_unknown_recruiting"):
+        nonblocking.add(UNKNOWN_RECRUITING)
+    # An empty city preference does not imply the original author's city.
+    location_ok = bool(place) and (not cities or local_match or remote_match)
+    matched = not hard and bool(matches) and evidence and location_ok and not set(unknown) - nonblocking
+    reason = ("岗位文本包含你设置的目标关键词：" + "、".join(matches) if matches
+              else "岗位文本尚未匹配已设置的目标关键词" if target_keys else "请设置目标关键词以便比较岗位")
+    reason += "。这是岗位偏好匹配，不代表已核实你的经历、任职资格或录用概率。"
+    return {"hard": hard, "strengths": strengths, "unknown": list(dict.fromkeys(unknown)), "gaps": gaps,
+            "score": 0 if hard else priority, "scope": "general",
+            "state": "excluded" if hard else "match" if matched else "review", "reason": reason}
+
+
+def _assess_legacy(job, prefs, exclusions, *, review_cleared=False):
     role = job.get("title") or ""
     jd = "\n".join(str(job.get(k) or "") for k in ("title", "description", "requirements"))
     place = job.get("location") or ""

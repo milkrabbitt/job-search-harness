@@ -2,7 +2,6 @@
 
 import argparse
 import contextlib
-import fcntl
 import hashlib
 import json
 import os
@@ -29,11 +28,14 @@ from .legacy import load_legacy
 from . import rules
 from .service import Harness, set_setting, setting
 from .storage import Store, stamp
+from .filelock import acquire_lock, release_lock
 
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 PRIVATE_ROOT = (Path.home() / "Library" / "Application Support" / "JobHarness-source"
-                if sys.platform == "darwin" else Path.home() / ".local" / "share" / "job-harness")
+                if sys.platform == "darwin" else
+                Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "JobHarness"
+                if sys.platform == "win32" else Path.home() / ".local" / "share" / "job-harness")
 CONFIG_FILE = "config.json"
 LAUNCH_AGENT = "local.job-harness.source"
 LAUNCHCTL = "/bin/launchctl"
@@ -43,12 +45,15 @@ DEFAULT_PORT = 8876
 @contextlib.contextmanager
 def lock_file(path, description):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with path.open("a", encoding="utf-8") as lock:
+    with path.open("a+b") as lock:
         try:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquire_lock(lock)
         except BlockingIOError:
             raise ValueError(description) from None
-        yield
+        try:
+            yield
+        finally:
+            release_lock(lock)
 
 
 def runtime_locks(root, account):
@@ -69,14 +74,17 @@ def runtime_locks(root, account):
 
 def write_private(path, payload):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".save-", delete=False) as temp:
-        temporary = Path(temp.name)
-        try:
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".save-", delete=False) as temp:
+            temporary = Path(temp.name)
             temp.write(payload)
             temp.flush()
             os.fsync(temp.fileno())
-            os.replace(temporary, path)
-        finally:
+        # Windows cannot replace a file while the temporary handle is open.
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
             temporary.unlink(missing_ok=True)
 
 
@@ -139,13 +147,14 @@ def stage_registered_resumes(store):
 
 
 def initialize(args, root):
+    fresh_store = not (root / "harness.sqlite3").exists()
     manifest = load_legacy(args.inheritance.expanduser().resolve()) if args.inheritance else {}
     if not isinstance(manifest, dict):
         raise ValueError("继承文件须是 JSON 对象。")
     prior = load_config(root) if (root / CONFIG_FILE).is_file() else {}
     if prior.get("demo"):
         raise ValueError("演示不能转换为真实资料库。请使用另一个私有数据目录。")
-    default_model = {"enabled": False, "executable": ""}
+    default_model = {"provider": "codex_cli", "enabled": False, "executable": ""}
     config = {
         "port": DEFAULT_PORT,
         "email": {"enabled": bool(args.account)},
@@ -168,6 +177,11 @@ def initialize(args, root):
         store = Store(root)
         counts = Harness(store, config, build_channels(config)).ingest_legacy(manifest) if manifest else {}
         staged, unavailable = stage_registered_resumes(store)
+        if fresh_store:
+            with store.tx(True) as connection:
+                set_setting(connection, "onboarding_required", True)
+                set_setting(connection, "stopped", True)
+                set_setting(connection, "outbound_paused", True)
         write_private(root / CONFIG_FILE, (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
     counts_text = "、".join(
         f"{name} {counts[key]}" for key, name in (
@@ -177,6 +191,8 @@ def initialize(args, root):
     print("私有配置和数据库已就绪。" + ("已继承 " + counts_text + "。" if counts_text else ""))
     if staged or unavailable:
         print(f"已校验并登记 {staged} 份私有 PDF 副本，{unavailable} 份待核对。")
+    if fresh_store:
+        print(f"启动 serve 后打开 http://127.0.0.1:{config['port']}/setup 完成首次配置；配置完成前不会启动求职任务。")
 
 
 def notify_local(*_args, **_kwargs):
@@ -240,7 +256,9 @@ def serve(root):
                 signal.signal(sig, stop)
             worker = threading.Thread(target=run, name="scheduler")
             worker.start()
-            print(f"个人求职 Harness 运行于 http://127.0.0.1:{port}/", flush=True)
+            onboarding = service.snapshot().get("onboarding", {})
+            page = "/setup" if onboarding.get("required") and not onboarding.get("complete") else "/"
+            print(f"个人求职 Harness 运行于 http://127.0.0.1:{port}{page}", flush=True)
             try:
                 while not service.shutdown.is_set():
                     server.handle_request()
@@ -259,6 +277,8 @@ def service_name(root):
 
 
 def launch_paths(root):
+    if sys.platform != "darwin":
+        raise ValueError("后台服务管理仅用于 macOS；本机请运行 serve，按 Ctrl+C 停止。")
     label = service_name(root)
     domain = "gui/" + str(os.getuid())
     plist = Path.home() / "Library" / "LaunchAgents" / (label + ".plist")
@@ -391,6 +411,12 @@ def stop(root, persistent=False):
 
 def status(root):
     config = load_config(root)
+    if sys.platform != "darwin":
+        port = config["port"]
+        print(f"控制台：{'健康' if healthy(port) else '离线'}，http://127.0.0.1:{port}/")
+        print("运行方式：前台 serve；在运行终端按 Ctrl+C 停止。")
+        print("私有数据：" + str(root))
+        return
     label, domain, plist = launch_paths(root)
     loaded = launch("print", domain + "/" + label, verify=False) if sys.platform == "darwin" else None
     running = loaded and loaded.returncode == 0 and "state = running" in loaded.stdout
@@ -545,7 +571,7 @@ def main():
         inputs.add_argument("--empty", action="store_true", help="从空资料开始（默认）")
         command.add_argument("--account", help="已确认的网易 126 邮箱地址")
         command.add_argument("--port", type=int, help="本地控制台端口")
-    for name in ("serve", "start", "stop", "status", "backup", "model-check", "desktop-open", "desktop-stop", "install-desktop"):
+    for name in ("serve", "start", "stop", "status", "backup", "model-check", "setup-status", "providers", "desktop-open", "desktop-stop", "install-desktop"):
         commands.add_parser(name)
     commands.add_parser("demo", help="初始化虚构数据，不连接招聘渠道")
     commands.add_parser("restore").add_argument("source", type=Path)
@@ -588,9 +614,15 @@ def main():
             init_demo(root, sample, load_config, runtime_locks, write_private)
         elif args.command == "restore":
             restore(root, args.source)
+        elif args.command == "providers":
+            from .model_backends import PROVIDERS
+            print(json.dumps(PROVIDERS, ensure_ascii=False, indent=2))
+        elif args.command == "setup-status":
+            service = build_service(root, load_config(root))
+            print(json.dumps(service.snapshot().get("onboarding", {}), ensure_ascii=False, indent=2))
         elif args.command == "model-check":
             config = load_config(root)
-            print(build_service(root, config).action("model_probe", {}))
+            print(build_service(root, config).action("setup_test_model", {}))
         elif args.command == "audit-mail":
             service = build_service(root, load_config(root))
             source = args.source.expanduser()

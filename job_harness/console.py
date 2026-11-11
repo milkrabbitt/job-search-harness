@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 NAV = {
     "/": "运行概览",
+    "/setup": "开始配置",
     "/jobs": "岗位",
     "/threads": "招聘消息",
     "/outbox": "草稿与发送",
@@ -47,7 +48,7 @@ STATES = {
     "manual_followup": "已建立联系，人工跟进",
     "hold": "保留待核", "excluded": "不投递", "cleared": "复核通过",
     "web_only": "需浏览器接管", "manual_review": "待人工核对",
-    "attachment_requested": "附件请求待接受",
+    "attachment_requested": "附件请求待接受", "held": "已暂停待处理",
 }
 KIND = {
     "reply_check": "查收回复", "poll": "查收回复", "check": "查收回复",
@@ -126,6 +127,12 @@ document.addEventListener('submit', async (event) => {
     const button = event.submitter || form.querySelector('button');
     if (button.disabled) return;
     button.disabled = true;
+    const title = button.textContent;
+    const action = form.querySelector('[name=action]').value;
+    if (action === 'setup_test_model') button.textContent = '正在测试连接，请稍候…';
+    else if (action === 'setup_start') button.textContent = '正在启动…';
+    else button.textContent = '正在处理…';
+    form.setAttribute('aria-busy', 'true');
     const old = form.querySelector('[role=alert]');
     if (old) old.remove();
     try {
@@ -144,8 +151,36 @@ document.addEventListener('submit', async (event) => {
             ? error.message : '未收到有效的后台响应。请先刷新核对当前状态，再决定是否重试。';
         form.append(notice);
         button.disabled = false;
+        button.textContent = title;
+        form.removeAttribute('aria-busy');
     }
 });
+const modelForm = document.querySelector('#setup-model-form form');
+if (modelForm) {
+    const provider = modelForm.querySelector('[name=provider]');
+    const updateHelp = () => {
+        const choice = provider.selectedOptions[0];
+        if (!choice) return;
+        document.querySelector('#provider-help').textContent = choice.dataset.help;
+        modelForm.querySelector('[name=model_name]').required = provider.value !== 'codex_cli';
+        document.querySelector('#setup-codex-path').hidden = provider.value !== 'codex_cli';
+    };
+    provider.addEventListener('change', () => {
+        const choice = provider.selectedOptions[0];
+        modelForm.querySelector('[name=base_url]').value = choice.dataset.baseUrl || '';
+        modelForm.querySelector('[name=api_key_env]').value = choice.dataset.keyEnv || '';
+        modelForm.querySelector('[name=model_name]').value = '';
+        modelForm.querySelector('[name=api_key]').value = '';
+        updateHelp();
+    });
+    const unsaved = () => {
+        document.querySelector('#setup-edit-notice').textContent = '有尚未保存的模型设置。先保存，再测试连接或启动。';
+        document.querySelectorAll('#setup-test-model button, #setup-launch button').forEach(button => { button.disabled = true; });
+    };
+    modelForm.addEventListener('input', unsaved);
+    modelForm.addEventListener('change', unsaved);
+    updateHelp();
+}
 """
 SCRIPT_HASH = base64.b64encode(hashlib.sha256(ACTIONS_SCRIPT.encode()).digest()).decode('ascii')
 
@@ -224,8 +259,21 @@ article[id^="send-"]>dl{grid-template-columns:repeat(auto-fit,minmax(min(100%,28
 dt{font-weight:650;font-size:12px;color:var(--muted);margin-top:4px}
 dd{margin:0;overflow-wrap:anywhere}
 .id{font-variant-numeric:tabular-nums;color:var(--muted)}
+.setup-intro{max-width:850px;margin-bottom:18px}
+.setup-progress{list-style:none;padding:0;margin:18px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.setup-progress li{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}
+.setup-progress li.done{border-color:#95bda9;background:var(--soft)}
+.setup-progress a{display:block;font-weight:650;text-decoration:none}
+.setup-progress small{display:block;margin-top:4px}
+.setup-step{scroll-margin-top:16px;margin-top:18px}
+.setup-step h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.step-number{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--accent);font-size:14px}
+.setup-checks{list-style:none;margin:10px 0 16px;padding:0}
+.setup-checks li{padding:6px 0;display:flex;gap:10px;align-items:baseline}
+.setup-form-actions{margin-top:12px}.setup-help{max-width:900px;margin:8px 0 13px}
+[hidden]{display:none!important}
 @media(max-width:650px){header,main{padding-left:13px;padding-right:13px}.heading{align-items:start;flex-direction:column}
-nav a{padding:8px}.panel{padding:12px}main{padding-top:16px}.local{font-size:12px}}
+nav a{padding:8px}.panel{padding:12px}main{padding-top:16px}.local{font-size:12px}.setup-progress{grid-template-columns:repeat(2,minmax(0,1fr))}}
 """
 
 
@@ -348,9 +396,19 @@ def _hidden(name, value):
     return f'<input type="hidden" name="{escape(name)}" value="{_text(value, "")}">'
 
 
-def _check(name, label, current):
+def _check(name, label, current, required=False):
     selected = " checked" if str(current).lower() in {"true", "1", "yes", "on"} else ""
-    return f'<label class="field"><input type="checkbox" name="{escape(name)}" value="1"{selected}> {escape(label)}</label>'
+    needed = " required" if required else ""
+    return f'<label class="field"><input type="checkbox" name="{escape(name)}" value="1"{selected}{needed}> {escape(label)}</label>'
+
+
+def _matching_preset(value):
+    choices = (("general", "通用求职（按你的目标与排除项匹配）"),
+               ("legacy_ai_application", "AI 应用 / 产品历史预设"))
+    return '<label class="field">岗位匹配预设<select name="matching_preset">' + ''.join(
+        f'<option value="{key}"{" selected" if key == value else ""}>{label}</option>'
+        for key, label in choices
+    ) + '</select></label>'
 
 
 class Console:
@@ -359,10 +417,11 @@ class Console:
         self.token = token
         self.page = page
 
-    def form(self, name, title, body="", tone="", **values):
+    def form(self, name, title, body="", tone="", disabled=False, **values):
         hidden = _hidden("token", self.token) + _hidden("action", name) + _hidden("next", self.page)
         hidden += "".join(_hidden(key, val) for key, val in values.items())
-        return f'<form method="post" action="/action">{hidden}{body}<button class="{escape(tone)}">{escape(title)}</button></form>'
+        state = " disabled" if disabled else ""
+        return f'<form method="post" action="/action">{hidden}{body}<button class="{escape(tone)}"{state}>{escape(title)}</button></form>'
 
     def render(self, query):
         notice = query.get("notice", [""])[0]
@@ -377,12 +436,16 @@ class Console:
         handlers = {
             "/": self.overview, "/jobs": lambda: self.jobs(query), "/threads": self.threads,
             "/outbox": self.outbox, "/decisions": self.decisions, "/settings": self.settings,
-            "/events": self.events,
+            "/events": self.events, "/setup": self.setup,
         }
         title = NAV[self.page]
         if self.data.get("demo"):
             message = ('<div class="notice" role="status"><strong>离线演示</strong> · 岗位、对话和附件全部虚构；'
                        '显示的回执只来自本机模拟，不会发邮件。</div>' + message)
+        onboarding = self.data.get("onboarding") or {}
+        if onboarding.get("required") and not onboarding.get("complete") and self.page != "/setup":
+            message += ('<div class="notice"><strong>先完成首次配置，再开始你的求职工作流。</strong> '
+                        '<a href="/setup">设置目标、接入模型并检查启动条件 →</a></div>')
         return (
             '<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -846,13 +909,218 @@ class Console:
             '<div class="stack">' + ("".join(cards) or _empty("暂无需要你决定的事项")) + '</div>'
         )
 
+    def setup(self):
+        onboarding = self.data.get("onboarding") or {}
+        prefs = {**PREFERENCE_DEFAULTS, **(self.data.get("preferences") or {})}
+        model = self.data.get("model") or {}
+        demo = bool(self.data.get("demo"))
+        complete = bool(onboarding.get("complete"))
+        steps = [
+            ("profile", "求职目标", onboarding.get("profile_ready"), "告诉它你想找什么"),
+            ("model", "接入模型", onboarding.get("model_ready"), "选择服务并验证连接"),
+            ("sources", "岗位来源", onboarding.get("source_ready"), "添加来源或连接搜索渠道"),
+            ("start", "检查并启动", complete, "检查通过后开始工作"),
+        ]
+        progress = '<ol class="setup-progress" aria-label="配置进度">' + "".join(
+            f'<li class="{"done" if ready else ""}"><a href="#setup-{key}">{number}. {title}</a>'
+            f'<small>{"✓ 已完成" if ready else hint}</small></li>'
+            for number, (key, title, ready, hint) in enumerate(steps, 1)
+        ) + '</ol>'
+        matching_preset = prefs.get("matching_preset", "general" if onboarding.get("required") else "legacy_ai_application")
+        summary_key = "summary_general" if matching_preset == "general" else "summary_app"
+        summary = next((fact.get("value", "") for fact in self.data.get("facts", [])
+                        if fact.get("key") == summary_key and fact.get("state") in {"confirmed", "verified"}), "")
+        profile_fields = (
+            '<div class="form-grid">'
+            + _field("directions", "岗位方向（如：后端开发、产品经理）", prefs.get("directions"))
+            + _field("cities", "目标城市（多个用逗号分隔）", prefs.get("cities"))
+            + _field("salary_floor", "已确认的薪资底线（选填）", prefs.get("salary_floor"))
+            + _field("target_scope", "求职范围与重要偏好（选填）", prefs.get("target_scope"))
+            + _matching_preset(matching_preset)
+            + '</div>' + _check("allow_remote", "接受远程岗位", prefs.get("allow_remote"))
+            + '<label class="field">本人确认的经历与优势摘要（选填，最多 3000 字）'
+              '<textarea name="summary" maxlength="3000">' + _text(summary, "") + '</textarea></label>'
+            + '<p class="muted setup-help">建议填写简短的岗位方向关键词；方向留空时会按求职范围匹配。选择目标城市，或勾选接受远程。'
+              '摘要保存为本人确认的事实，只写实际经历；留空可稍后补充。生成申请草稿还需要核实资料、联系方式和批准的简历。</p>'
+        )
+        profile_form = self.form("setup_profile", "保存求职目标", profile_fields, "primary", disabled=demo)
+
+        providers = model.get("providers") or []
+        if not providers:
+            # Registry data remains the single source of supported backend names.
+            from .model_backends import PROVIDERS
+            providers = [{"id": key, **value} for key, value in PROVIDERS.items()]
+        providers = [item for item in providers if item.get("id") != "none"]
+        current_provider = model.get("provider") or ""
+        selected_provider = current_provider if current_provider in {p["id"] for p in providers} else "ollama"
+        if selected_provider not in {p["id"] for p in providers} and providers:
+            selected_provider = providers[0]["id"]
+        provider_options = []
+        provider_rows = []
+        for item in providers:
+            provider = item["id"]
+            local = provider in {"ollama", "lmstudio"}
+            if provider == "codex_cli":
+                help_text = "调用本机已安装并登录的 Codex CLI；沿用 CLI 登录，不需要在此保存 API Key。"
+                category = "本机命令行；需安装并登录"
+            elif local:
+                help_text = "连接你电脑上已启动的模型服务。请先下载模型、启动服务，再填写服务中显示的模型 ID。"
+                category = "本地服务；通常不需要 API Key"
+            elif provider == "openai_compatible":
+                help_text = "适用于提供 OpenAI Chat Completions 兼容接口的服务；需填写完整 Base URL 和模型 ID，兼容性以连接测试为准。"
+                category = "兼容接口；以连接测试为准"
+            else:
+                help_text = "连接你自己的模型服务账户。填写该服务当前可用的模型 ID 和 API Key；调用可能产生服务商费用。"
+                category = "云端 API；需要自己的密钥"
+            chosen = ' selected' if provider == selected_provider else ''
+            provider_options.append(
+                f'<option value="{_text(provider)}" data-base-url="{_text(item.get("base_url"), "")}" '
+                f'data-key-env="{_text(item.get("api_key_env"), "")}" data-help="{_text(help_text)}"{chosen}>'
+                f'{_text(item.get("label") or provider)}</option>'
+            )
+            provider_rows.append([_text(item.get("label") or provider), escape(category), _text(item.get("protocol"))])
+        provider_select = '<label class="field">模型服务<select name="provider">' + ''.join(provider_options) + '</select></label>'
+        selected = next((item for item in providers if item["id"] == selected_provider), {})
+        base_url = model.get("base_url") if current_provider == selected_provider else selected.get("base_url")
+        api_key_env = model.get("api_key_env") if current_provider == selected_provider else selected.get("api_key_env")
+        key_state = "已配置（密钥不会显示）" if model.get("key_configured") else "未检测到密钥；本地服务和 CLI 可不需要"
+
+        def bounded_number(name, title, value, low, high):
+            return (f'<label class="field">{escape(title)}<input type="number" name="{escape(name)}" '
+                    f'value="{_text(value, "")}" min="{low}" max="{high}" step="1" required></label>')
+
+        model_fields = (
+            _hidden("enabled", "1")
+            + '<div class="form-grid">' + provider_select
+            + _field("model_name", "模型 ID（复制服务商或本机模型列表中的名称）", model.get("configured_name", model.get("name", "")))
+            + _field("base_url", "Base URL（选择服务后自动填入，可修改）", base_url or "", "url")
+            + '</div><p id="provider-help" class="muted setup-help">选择服务后填写模型 ID，并保存配置。</p>'
+            + '<fieldset><legend>连接凭据</legend><div class="form-grid">'
+            + '<label class="field">API Key（选填；留空保留已有密钥）'
+              '<input type="password" name="api_key" maxlength="4096" autocomplete="new-password" spellcheck="false"></label>'
+            + _field("api_key_env", "或使用环境变量名称（不是密钥内容）", api_key_env or "")
+            + '</div><p class="muted">凭据状态：' + escape(key_state)
+            + '。环境变量须在启动本服务前设置，并优先于本机保存的密钥；此处输入的密钥只保存在本机，不进入导出与页面。</p>'
+            + _check("delete_api_key", "移除此服务本机保存的密钥（勾选后保持 API Key 空白；环境变量不受影响）", False)
+            + '</fieldset>'
+        )
+        model_fields += (
+            '<div id="setup-codex-path">' + _field("executable", "Codex 命令或可执行文件路径（仅 CLI）", model.get("executable") or "codex") + '</div>'
+            + '<fieldset><legend>调用与超时边界</legend><div class="form-grid">'
+            + bounded_number("max_calls", "每日调用上限（0–1000；0 暂停调用）", model.get("max_calls", 3), 0, 1000)
+            + bounded_number("timeout", "单次超时（5–180 秒）", model.get("timeout", 45), 5, 180)
+            + bounded_number("max_output_tokens", "单次输出 token 上限（64–4096）", model.get("max_output_tokens", 1024), 64, 4096)
+            + _field("cost_limit", "每日费用上限（选填；费用未知时阻止调用）", model.get("cost_limit", ""))
+            + '</div><p class="muted">未填费用上限时，仍受调用次数与 token 限制；这不是账单保证。云服务的预算与计费以服务商为准。</p></fieldset>'
+            + '<p id="setup-edit-notice" role="status" class="muted"></p>'
+        )
+        model_form = '<div id="setup-model-form">' + self.form(
+            "setup_model", "保存模型配置", model_fields, "primary", disabled=demo,
+        ) + '</div>'
+        no_model = self.form(
+            "setup_no_model", "暂不接入模型，使用规则模式",
+            '<p class="muted">可先按固定规则采集和筛选岗位；不会调用模型，也没有模型复核。之后随时回来接入。</p>',
+            disabled=demo,
+        )
+        if current_provider == "none":
+            model_form = '<div class="notice">当前已选择规则模式，无需模型连接测试。</div>' + model_form
+
+        sources = [source for source in self.data.get("sources", []) if source.get("enabled")]
+        source_items = ''.join(
+            f'<li>{_text(source.get("company"))} · {_source(source.get("url"))}</li>' for source in sources
+        )
+        source_status = ('<p>已添加并启用 ' + str(len(sources)) + ' 个来源；启动时抓取核验。</p><ul>' + source_items + '</ul>') if sources else (
+            '<p class="muted">还没有启用的公开岗位来源。添加一家你关注的公司的官网招聘页作为起点。</p>'
+        )
+        if onboarding.get("connected_channels"):
+            source_status += '<p>已有可搜索渠道：' + '、'.join(_channel(channel) for channel in onboarding["connected_channels"]) + '；可直接通过该渠道开始。</p>'
+        source_form = self.form(
+            "setup_source", "添加岗位来源",
+            '<div class="form-grid">' + _field("url", "官网招聘页 HTTPS URL", "", "url", True)
+            + _field("company", "公司名称", required=True)
+            + _field("location", "页面明确标注的工作地点（选填）") + '</div>'
+            + '<p class="muted setup-help">仅使用公开页面。登录后内容、验证码及平台站内沟通仍需本人处理；添加来源不等于已经接通招聘平台。</p>',
+            disabled=demo, channel="official",
+        )
+        resume_scope = "general" if matching_preset == "general" else "ai"
+        resume_scopes = (("general", "通用求职"), ("ai", "AI 应用 / 产品"),
+                         ("robotics", "机器人 / 具身智能"), ("finance", "金融"))
+        resume_select = '<label class="field">简历适用范围<select name="scope">' + ''.join(
+            f'<option value="{key}"{" selected" if key == resume_scope else ""}>{label}</option>'
+            for key, label in resume_scopes
+        ) + '</select></label>'
+        resume_form = self.form(
+            "setup_resume", "保存这份简历到本机资料库",
+            '<div class="form-grid">' + _field("path", "运行本程序的电脑上的 PDF 绝对路径", required=True)
+            + _field("label", "简历版本名称（如：后端开发 · 中文）", required=True) + resume_select + '</div>'
+            + _check("approved", "我已核对该 PDF，允许把此版本用于后续申请（实际发送仍需单独授权）", False, required=True)
+            + '<p class="muted">仅接受最大 20 MB 的 PDF。将选定文件复制到私有数据目录，保留原文件并记录文件指纹；'
+              '这一步不会发送简历。路径填写本机完整路径，不是网盘链接。</p>', disabled=demo,
+        )
+        resume_count = len(self.data.get("resumes", []))
+        resume_view = (f'<p>已登记 {resume_count} 个简历版本。<a href="/settings#resumes">查看版本及可发送状态</a></p>'
+                       if resume_count else '<p class="muted">尚未登记简历，不影响先采集和筛选岗位。</p>')
+        channel_status = '<div class="chips">' + ''.join(
+            f'<span>{_channel(item.get("name"))} {_badge(item.get("status"))}</span>' for item in self.data.get("channels", [])
+        ) + '</div>'
+
+        probe = onboarding.get("model_test") or {}
+        probe_state = probe.get("state") or "unverified"
+        test_detail = probe.get("detail") or "保存模型后运行连接测试。测试不发送简历、聊天记录或求职资料。"
+        if current_provider == "none" and onboarding.get("model_ready"):
+            probe_state = "disabled"
+            test_detail = "已明确选择规则模式，无需连接测试；不会调用模型。"
+        can_test = bool(model.get("enabled")) and current_provider not in {"", "none"} and not demo
+        probe_form = '<div id="setup-test-model">' + self.form(
+            "setup_test_model", "测试已保存的模型连接", disabled=not can_test,
+        ) + '</div>'
+        checks = ''.join(
+            f'<li>{_badge("done" if ready else "needs_setup")}<span>{label}</span></li>'
+            for ready, label in [
+                (onboarding.get("profile_ready"), "已保存有效的求职目标"),
+                (onboarding.get("model_ready"), "模型连接已通过测试，或已明确选择规则模式"),
+                (onboarding.get("source_ready"), "已启用公开来源，或已连接支持搜索的渠道"),
+            ]
+        )
+        missing = onboarding.get("missing") or []
+        pending = '<p class="muted">还需要：' + '；'.join(_text(item) for item in missing) + '。</p>' if missing else ''
+        start_form = '<div id="setup-launch">' + self.form(
+            "setup_start", "保存配置并启动后台任务" if not complete else "按当前配置启动后台任务",
+            disabled=not onboarding.get("ready") or demo, tone="primary",
+        ) + '</div>'
+        completion = '<div class="notice">配置已完成。可以随时修改；更换模型后需要重新测试连接。</div>' if complete else ''
+        return (
+            '<h1>让求职助手真正开始工作</h1><p class="setup-intro muted">从你的目标出发，连接自己的模型，添加可信来源。'
+            '每一步都能保存，检查通过后启动后台采集与筛选。保存目标或模型配置会暂停后台，完成检查并启动后继续。</p>' + completion + progress
+            + '<section id="setup-profile" class="panel setup-step"><h2><span class="step-number">1</span> 告诉它你想找什么</h2>'
+            + profile_form + '</section>'
+            + '<section id="setup-model" class="panel setup-step"><h2><span class="step-number">2</span> 接入你自己的模型</h2>'
+            + '<p class="muted">可连接本地模型服务、云端 API 或本机 Codex CLI。网页版聊天订阅不等于 API 凭据；无需把账户密码交给本工具。</p>'
+            + _details("查看支持的模型服务与接入方式", _table(("服务", "接入方式", "协议"), provider_rows)
+                       + '<p class="muted">这些是已实现的适配器；你的账户权限、模型可用性和服务兼容性，以本机连接测试结果为准。</p>')
+            + model_form + '<div class="section">' + no_model + '</div></section>'
+            + '<section id="setup-sources" class="panel setup-step"><h2><span class="step-number">3</span> 准备岗位来源与资料</h2>'
+            + source_status + source_form + '<div class="section">' + resume_view
+            + _details("选填：导入已核对的 PDF 简历", resume_form) + '</div><div class="section">' + channel_status
+            + '<p class="muted">简历不是启动采集的前提。需要生成申请或发送附件时，再核实个人资料和简历版本。</p>'
+            + '<div class="actions"><a href="/settings#sources">管理全部来源</a><a href="/settings#resumes">查看简历与资料</a>'
+              '<a href="/">查看渠道能力与状态</a></div></div></section>'
+            + '<section id="setup-start" class="panel setup-step"><h2><span class="step-number">4</span> 检查通过，让它开始</h2>'
+            + '<h3>模型连接测试</h3><p>' + _badge(probe_state) + ' ' + _text(test_detail) + '</p>'
+            + '<p class="muted">仅测试已保存的配置。测试可能使用一次模型调用并产生少量服务商费用；连接超时会给出失败原因。</p>'
+            + probe_form + '<ul class="setup-checks">' + checks + '</ul>' + pending
+            + '<p>启动后会安排来源检查与岗位筛选。外发仍保持暂停；不会因为完成配置就向招聘方发送消息或简历。</p>'
+            + start_form + '<p class="muted section">任务只在本程序运行时执行，关闭终端或电脑休眠会暂停；'
+              '下次启动可继续查看状态。<a href="/jobs">看岗位结果</a> · <a href="/events">看执行日志</a></p></section>'
+        )
+
     def settings(self):
         prefs = {**PREFERENCE_DEFAULTS, **(self.data.get("preferences") or {})}
         legacy_send_fields = {"send_start", "send_end", "daily_limit"}
         fields = "".join(_field(key, label, prefs.get(key), field_type) for key, label, field_type in PREFERENCE_FIELDS
                          if not prefs["send_anytime"] or key not in legacy_send_fields)
         checks = "".join(_check(key, label, prefs.get(key)) for key, label in BOOL_FIELDS)
-        field_list = '<div class="form-grid">' + fields + '</div><div class="checks">' + checks + '</div>'
+        field_list = '<div class="form-grid">' + fields + _matching_preset(prefs.get("matching_preset", "legacy_ai_application")) + '</div><div class="checks">' + checks + '</div>'
         preference = self.form("preferences", "保存求职偏好", field_list, "primary")
         exclusions = self.data.get("exclusions", [])
         exclusion_table = _table(
@@ -899,13 +1167,6 @@ class Console:
             ("费用", _text(model.get("cost") or model.get("cost_today"), "未知")),
             ("说明", _text(model.get("detail"))),
         ])
-        model_set = self.form(
-            "set_model", "保存模型设置",
-            _field("model_name", "官方模型名称（空白使用已配置的默认）", model.get("configured_name", ""))
-            + _field("max_calls", "每日调用上限", model.get("max_calls", model.get("daily_limit")), "number")
-            + _field("timeout", "单任务超时（秒）", model.get("timeout"), "number")
-            + _field("cost_limit", "费用上限（费用未知时会阻止模型调用）", model.get("cost_limit")),
-        )
         source_add = self.form(
             "add_source", "添加公开来源",
             _field("url", "已核验的官网招聘 URL", "", "url", True)
@@ -927,12 +1188,13 @@ class Console:
             '<h1>资料与设置</h1><p class="muted">时间与节奏统一按 Asia/Shanghai。未确认的薪资底线可保持空白。</p>'
             f'<section class="panel"><h2>求职条件与节奏</h2>{preference}</section>'
             f'<section class="section"><h2>个人事实、作品与常用回答</h2>{facts}</section>'
-            f'<section class="section"><h2>简历版本</h2>{resumes}</section>'
+            f'<section id="resumes" class="section"><h2>简历版本</h2>{resumes}</section>'
             f'<section class="section two-col"><article class="panel"><h2>模型与用量</h2>{model_view}'
-            f'{_details("修改模型与调用上限", model_set)}{self.form("model_probe", "安排模型检查")}'
+            '<p>在配置向导中选择模型服务、管理本机凭据和用量上限，并测试连接。</p>'
+            '<a class="button" href="/setup#setup-model">配置或更换模型</a>'
             '</article><article class="panel"><h2>来源与备份</h2>'
             f'{source_add}<div class="section">{self.form("backup", "创建数据库备份")}</div></article></section>'
-            f'<section class="section"><h2>公开岗位来源</h2>{sources}</section>'
+            f'<section id="sources" class="section"><h2>公开岗位来源</h2>{sources}</section>'
             f'<section class="section"><h2>排除名单</h2><div class="panel">{exclusion_add}</div>{exclusion_table}</section>'
         )
 
@@ -1015,7 +1277,13 @@ def make_handler(service, token, port):
                     )
                 elif parsed.path in NAV:
                     query = parse_qs(parsed.query, max_num_fields=20)
-                    result = Console(service.snapshot(), token, parsed.path).render(query)
+                    snapshot = service.snapshot()
+                    onboarding = snapshot.get("onboarding") or {}
+                    if (parsed.path == "/" and not snapshot.get("demo") and onboarding.get("required")
+                            and not onboarding.get("complete")):
+                        self._respond(HTTPStatus.SEE_OTHER, headers={"Location": "/setup"}, head=head)
+                        return
+                    result = Console(snapshot, token, parsed.path).render(query)
                     self._respond(HTTPStatus.OK, result, head=head)
                 else:
                     self._respond(HTTPStatus.NOT_FOUND, "页面不存在。", head=head)

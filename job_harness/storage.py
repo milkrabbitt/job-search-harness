@@ -1,7 +1,7 @@
 """Private SQLite state and atomic transactions."""
 import os
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -107,7 +107,7 @@ class Store:
         self.root = Path(data_dir).expanduser().resolve()
         self.root.mkdir(parents=True, mode=0o700, exist_ok=True)
         self.path = self.root / "harness.sqlite3"
-        with self.connect() as connection:
+        with closing(self.connect()) as connection, connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA)
             columns = {row[1] for row in connection.execute("PRAGMA table_info(outbox)")}
@@ -143,7 +143,7 @@ class Store:
         folder = self.root / "backups"
         folder.mkdir(exist_ok=True, mode=0o700)
         target = folder / ("harness-" + now().strftime("%Y%m%d-%H%M%S-%f") + ".sqlite3")
-        with self.connect() as source, sqlite3.connect(str(target)) as destination:
+        with closing(self.connect()) as source, closing(sqlite3.connect(str(target))) as destination, destination:
             source.backup(destination)
             if destination.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise RuntimeError("数据库备份完整性校验失败")
