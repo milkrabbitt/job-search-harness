@@ -23,6 +23,12 @@ CREATE TABLE IF NOT EXISTS facts(id INTEGER PRIMARY KEY, key TEXT NOT NULL, valu
  source TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, UNIQUE(key,source));
 CREATE TABLE IF NOT EXISTS resumes(id INTEGER PRIMARY KEY, label TEXT NOT NULL, path TEXT NOT NULL,
  sha256 TEXT NOT NULL UNIQUE, modified_at TEXT, scope TEXT NOT NULL, approved INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS resume_texts(resume_id INTEGER PRIMARY KEY REFERENCES resumes(id),
+ text TEXT NOT NULL, status TEXT NOT NULL, detail TEXT NOT NULL, pages INTEGER,
+ truncated INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'pending', source TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS candidate_reviews(job_id INTEGER NOT NULL REFERENCES jobs(id),
+ context_hash TEXT NOT NULL, state TEXT NOT NULL, result_json TEXT NOT NULL, model TEXT, updated_at TEXT NOT NULL,
+ PRIMARY KEY(job_id,context_hash));
 CREATE TABLE IF NOT EXISTS exclusions(pattern TEXT PRIMARY KEY, note TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS channels(name TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL,
  detail TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, next_check TEXT);

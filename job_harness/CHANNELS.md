@@ -2,7 +2,7 @@
 
 [安装](../docs/install.md) · [首次配置](../docs/onboarding.md) · [模型接入](../docs/models.md)
 
-基础运行需要 Python 3.9+、SQLite 3.24+，以及包含 `Asia/Shanghai` 的 IANA 时区数据。控制台目前为中文，调度时间沿用上海时区。Python 需提供 `sqlite3`、`ssl` 和 `zoneinfo`；文件锁在 POSIX 使用 `fcntl`，Windows 使用 `msvcrt`。默认运行只使用标准库；缺时区数据时可安装 `tzdata`。前端由 `console.py` 提供，无需 Node.js 构建或 CDN。
+基础运行需要 Python 3.9+、SQLite 3.24+，以及包含 `Asia/Shanghai` 的 IANA 时区数据。控制台目前为中文，调度时间沿用上海时区。Python 需提供 `sqlite3`、`ssl` 和 `zoneinfo`；文件锁在 POSIX 使用 `fcntl`，Windows 使用 `msvcrt`。PDF 文字提取使用 `pypdf==6.21.4`，在所用虚拟环境中运行 `python -m pip install -r requirements.txt` 安装。缺少提取依赖时显示手动核对状态，其他核心功能和手动经历填写仍可使用。缺时区数据时可安装 `tzdata`。前端由 `console.py` 提供，无需 Node.js 构建或 CDN。
 
 ## 操作系统支持
 
@@ -20,12 +20,20 @@ macOS 后台安装使用 `launchctl`，通知使用 `osascript`，桌面入口�
 
 首次非演示安装从 `/setup` 填求职条件、选择并测试模型（或明确不使用模型）、登记来源，再核对并开始。来源保存只校验结构，首次扫描才检验网络和解析。自动扫描仅针对已经配置的来源，不代表能自主遍历全网。启动扫描与开启外发是两件事。
 
+## 简历与经历
+
+在 `/profile` 通过文件选择框上传最大 20 MB 的 PDF。附件批准、提取文字确认和模型数据同意分别处理。提取后的文字先由本人核对；可补充最多 6000 字的经历摘要和最多 600 字的对外简介。扫描件、加密文件、依赖缺失、解析失败或提取超限均会给出手动核对提示。PDF 原文件保存在本机私有目录。
+
+只有勾选 `profile_model_consent` 且启用相应模型后，模型才会接收用于经历匹配的裁剪文字。 [上传与匹配说明](../docs/candidate-guide.md) · [薪资对比](../docs/compensation.md)
+
 ## 网易 126 邮箱
 
 1. 在网易 126 网页设置启用 IMAP 和 SMTP，生成客户端授权码。
 2. 在 macOS 的「钥匙串访问」创建通用密码条目。默认项目名称为 `job-harness-126-imap-smtp`，账号填本机配置的完整 126 邮箱地址，密码填客户端授权码。若本机配置设置了 `email.keychain_service`，使用该项目名称。也可用系统 `security add-generic-password` 创建条目，使用交互式密码输入。
 3. 在控制台安排邮箱检查，核对 IMAP 收件箱、已发送目录及 SMTP 登录。首次读取建立历史基线。若 IMAP 无法唯一识别已发送目录，可设置 `email.sent_folder`。
 4. 用完测试账号可关闭配置中的 `email.enabled`。授权码保留在钥匙串中。
+
+邮箱已经启用、核验为可发送且未暂停，并完成首次配置后，可在 `/profile` 明确授权自动申请与常规回复。常规回复仅处理有核实事实依据的明确问题，也可按勾选授权在无回复后依设置间隔跟进一次。面试、作业、薪资、Offer、到岗、搬迁和敏感资料进入待决定，此类事项未处理的会话停止自动常规回复。人工跟进、已拒绝或要求停止联系的记录保留并约束后续动作。
 
 协议端点为 `imap.126.com:993` 和 `smtp.126.com:465`，均验证 TLS 证书。读取按招聘主题、已知地址及线程头筛选，`email.history_days` 和 `email.scan_limit` 可调整检查范围。回复只有一个收件人并保留 `In-Reply-To` 和 `References`。SMTP 接受后会另外核验已发送目录。结果不明的发送等待同一 Message-ID 的证据。
 
@@ -52,7 +60,7 @@ BOSS 直聘、猎聘和鱼泡的站内动作使用操作者已登录的正常网
 当前适配 Codex CLI、OpenAI、Anthropic、Gemini、DeepSeek、Qwen、Moonshot、Zhipu、MiniMax、Ollama、LM Studio 和 OpenAI-compatible。每个 API 模型名由用户根据自己的账号或本机服务填写；没有默认承诺可用的模型。详见[供应商矩阵、端点、限额与密钥说明](../docs/models.md)。
 
 - Codex CLI 使用本机已认证的可执行文件；可在设置中指定路径。CLI 参数兼容性和实际账号额度需本机连接测试。
-- 云端适配器发送有限的结构化匹配特征；不发送完整简历、招聘聊天或原始 JD。连接测试使用合成输入，仍可能收费。
+- 连接测试使用合成输入，仍可能收费。真实经历复核需要 `profile_model_consent`，发送已确认经历及 JD 的裁剪文字，对常见联系方式、凭据、链接和路径做规则遮蔽。源 PDF 保留在本机。结果需引用提供的证据，自动申请等待与当前内容对应的相关复核，硬性排除和外发授权仍生效。
 - Ollama / LM Studio 由用户先启动并加载模型，工作台只连接其回环 API。明文 HTTP 仅用于回环；外部端点必须 HTTPS，接口不跟随重定向。
 - API Key 可从环境变量读取，或保存在私有数据目录 `private/model-keys/` 的未加密文件中。它们与 **126 / 猎聘使用的 macOS 钥匙串是不同存储方式**，不会随数据库备份恢复。
 - 基础规则筛选、离线演示和模拟测试不需要真实模型账号。模型复核只提供建议，不能代替外发授权或用户对面试、薪资与 Offer 的决定。

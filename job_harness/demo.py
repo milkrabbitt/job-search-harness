@@ -111,6 +111,13 @@ def seed(root, config):
             raise RuntimeError("无法创建离线演示申请")
     harness.send_one()
     with store.tx(True) as c:
+        set_setting(c,"candidate_profile",{
+            "summary":"虚构演示：设计过角色对话原型，完成交互测试并根据反馈迭代。",
+            "intro":"虚构演示：做过对话产品设计与测试。",
+            "confirmed":True,"source":"虚构演示数据","updated_at":stamp()})
+        for jid, salary in zip(ids, ("人民币 18–26K/月 · 13薪", "人民币 20–28K/月", "")):
+            c.execute("UPDATE jobs SET salary=? WHERE id=?",(salary,jid))
+
         confirmed = one(c, "SELECT * FROM outbox WHERE job_id=? AND state='confirmed'", (ids[0],))
         if not confirmed or confirmed["provider_id"] != "demo-receipt-001":
             raise RuntimeError("未取得离线模拟回执")

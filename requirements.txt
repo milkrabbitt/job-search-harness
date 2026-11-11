@@ -1,11 +1,9 @@
-# JobHarness runtime and tests use only the Python standard library.
-# Requires CPython 3.9+ on macOS, Linux, or Windows and Python's sqlite3
-# module linked to SQLite 3.24+ (for UPSERT). File locking uses the standard
-# library: fcntl on POSIX, msvcrt on native Windows.
-# The system IANA time zone database must provide Asia/Shanghai; install the
-# operating system's tzdata package if it is missing. The optional PyPI
-# tzdata package is also a fallback for zoneinfo on minimal systems and is
-# normally required on Windows. scripts/bootstrap.ps1 -InstallTimezone
-# installs it explicitly in the selected Python environment.
-# macOS integration and other optional tools are documented in
-# job_harness/CHANNELS.md. No pip dependencies are required by default.
+# CPython 3.9+ and SQLite 3.24+. The application uses stdlib file locking
+# (fcntl on POSIX, msvcrt on Windows). PDF uploads use pypdf for text extraction.
+# pypdf 6.21.4 supports Python >=3.9; pypdf 7 requires Python >=3.10.
+# Official package metadata: https://pypi.org/project/pypdf/6.21.4/
+pypdf==6.21.4
+
+# IANA timezone data must include Asia/Shanghai. Install the OS tzdata package
+# or the optional Python tzdata package on hosts without it (usually Windows).
+# macOS integrations are documented in job_harness/CHANNELS.md.

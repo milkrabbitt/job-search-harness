@@ -17,7 +17,9 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 NAV = {
     "/": "运行概览",
     "/setup": "开始配置",
+    "/profile": "我的经历与简历",
     "/jobs": "岗位",
+    "/salary": "薪资对比",
     "/threads": "招聘消息",
     "/outbox": "草稿与发送",
     "/decisions": "待我决定",
@@ -138,7 +140,8 @@ document.addEventListener('submit', async (event) => {
     try {
         const response = await fetch(form.getAttribute('action'), {
             method: 'POST', mode: 'same-origin', redirect: 'error',
-            headers: {Accept: 'application/json'}, body: new URLSearchParams(new FormData(form))
+            headers: {Accept: 'application/json'}, body: form.enctype === 'multipart/form-data'
+                ? new FormData(form) : new URLSearchParams(new FormData(form))
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.notice);
@@ -437,6 +440,8 @@ class Console:
             "/": self.overview, "/jobs": lambda: self.jobs(query), "/threads": self.threads,
             "/outbox": self.outbox, "/decisions": self.decisions, "/settings": self.settings,
             "/events": self.events, "/setup": self.setup,
+            "/profile": lambda: self.profile(query),
+            "/salary": lambda: self.salary(query),
         }
         title = NAV[self.page]
         if self.data.get("demo"):
@@ -606,6 +611,17 @@ class Console:
     def jobs(self, query):
         term = query.get("q", [""])[0].strip()[:200]
         records = self.data.get("jobs", [])
+        fit_filter = query.get("fit", [""])[0]
+        if fit_filter in {"related","unclear","not_related"}:
+            def has_fit(row):
+                try:
+                    details = row.get("match_json", {})
+                    if isinstance(details,str):
+                        details = json.loads(details)
+                    return details.get("candidate_review",{}).get("advice",{}).get("fit") == fit_filter
+                except (ValueError,AttributeError):
+                    return False
+            records = [row for row in records if has_fit(row)]
         if term:
             records = [
                 item for item in records
@@ -615,6 +631,8 @@ class Console:
             '<form class="row toolbar" action="/jobs" method="get">'
             f'<input aria-label="搜索岗位" placeholder="公司、岗位或城市" name="q" value="{_text(term, "")}" maxlength="200">'
             '<button>筛选</button><a class="button" href="/export.csv">导出台账 CSV</a></form>'
+            '<p><a href="/jobs">全部岗位</a> · <a href="/jobs?fit=related">经历有关联</a> · '
+            '<a href="/jobs?fit=unclear">经历待核实</a> · <a href="/salary">选择岗位比较薪资</a></p>'
         )
         job_form = "".join(_field(*field) for field in (
             ("company", "公司"), ("title", "岗位"), ("location", "实际工作地点"),
@@ -641,6 +659,15 @@ class Console:
                 ("官网域名", _text(job.get("domain"))), ("发布日期", _when(job.get("published_at"))),
                 ("来源", _source(job.get("url"))),
             ])
+            details = job.get("match_json") or {}
+            if isinstance(details,str):
+                try:
+                    details=json.loads(details)
+                except ValueError:
+                    details={}
+            fit = details.get("candidate_review",{}).get("advice",{}).get("fit")
+            fit_label = {"related":"经历有关联","unclear":"经历待核实","not_related":"经历关联不足"}.get(fit,"")
+            fit_badge = '<span class="badge">'+escape(fit_label)+'</span>' if fit_label else ""
             score = _text(job.get("match_score"))
             description = job.get("description") or job.get("responsibilities")
             requirements = job.get("requirements")
@@ -691,7 +718,7 @@ class Console:
             cards.append(
                 f'<article class="panel" id="job-{_text(job_id)}"><h3>{title}</h3><div class="chips">'
                 f'{_badge(job_status)}{followup}<span class="badge">{_channel(job.get("channel"))}</span>'
-                f'<span class="badge">匹配排序分 {score}</span></div>{fields}'
+                f'<span class="badge">匹配排序分 {score}</span>{fit_badge}</div>{fields}'
                 f'{_details("匹配点、缺口与未知项", reviewed + match + model_check)}{full}'
                 f'{_details("补充 JD 复核", review_form)}'
                 f'{browser_form}{_details("核验招聘收件人", recipient)}'
@@ -727,6 +754,22 @@ class Console:
             known.update(keys)
             if key:
                 items.append((title, _text(value[key], "无")))
+        known.update({"candidate_overlap","candidate_review","candidate_gate"})
+        overlap = value.get("candidate_overlap",{})
+        candidate = value.get("candidate_review",{})
+        advice = candidate.get("advice",{})
+        if overlap.get("strengths"):
+            items.append(("本机经历关联",_text([row["text"] for row in overlap["strengths"]])))
+        for key,title in (("strengths","模型匹配点与来源"),("gaps","模型发现的缺口"),("unknowns","模型待确认事项")):
+            rows = advice.get(key,[])
+            if rows:
+                items.append((title,_text([row["text"]+"（依据："+ "；".join(str(candidate.get("references",{}).get(ref,ref))[:220] for ref in row["references"])+"）" for row in rows])))
+        if candidate:
+            items.append(("当前经历复核",_text(candidate.get("state"))))
+            if candidate.get("detail"):
+                items.append(("模型说明",_text(candidate["detail"])))
+        if value.get("candidate_gate"):
+            items.append(("自动申请等待原因",_text(value["candidate_gate"])))
         remaining = {key: item for key, item in value.items() if key not in known}
         return _dl(items) + (_block(remaining) if remaining else "")
 
@@ -908,6 +951,14 @@ class Console:
             '保存决定后由后台按授权规则重新检查。</p>'
             '<div class="stack">' + ("".join(cards) or _empty("暂无需要你决定的事项")) + '</div>'
         )
+
+    def profile(self, query):
+        from .candidate_ui import render
+        return render(self, query)
+
+    def salary(self, query):
+        from .compensation_ui import render
+        return render(self, query)
 
     def setup(self):
         onboarding = self.data.get("onboarding") or {}
@@ -1338,16 +1389,23 @@ def make_handler(service, token, port):
                 print(f"控制台 POST /action 拒绝 403，Origin={origin_kind}，Sec-Fetch-Site={site_kind}", flush=True)
                 self._action_result(HTTPStatus.FORBIDDEN, "浏览器未提供可核实的同源信息。请从本机控制台重新加载后操作。")
                 return
-            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+            multipart = self.headers.get_content_type() == "multipart/form-data"
+            if self.headers.get_content_type() not in {"application/x-www-form-urlencoded", "multipart/form-data"}:
                 self._action_result(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "提交格式无效。请重新加载控制台后操作。", page)
                 return
             try:
                 size = int(self.headers.get("Content-Length", "0"))
-                if not 0 < size <= 200_000 or self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) != 1:
+                limit = 20_040_000 if multipart else 200_000
+                if not 0 < size <= limit or self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) != 1:
                     raise ValueError
                 self.connection.settimeout(12)
                 raw = self.rfile.read(size)
-                fields = parse_qs(raw.decode("utf-8"), keep_blank_values=True, max_num_fields=45)
+                if multipart:
+                    from .web_upload import parse_multipart
+                    parsed_fields, uploaded = parse_multipart(self.headers.get("Content-Type", ""), raw)
+                    fields = {key: [value] for key,value in parsed_fields.items()}
+                else:
+                    fields = parse_qs(raw.decode("utf-8"), keep_blank_values=True, max_num_fields=45)
                 if len(raw) != size or any(len(values) != 1 for values in fields.values()):
                     raise ValueError
             except (OSError, UnicodeError, ValueError):
@@ -1366,7 +1424,12 @@ def make_handler(service, token, port):
                 for field, _ in BOOL_FIELDS:
                     data.setdefault(field, "0")
             try:
-                notice = str(service.action(name, data) or "操作已记录。")
+                if multipart:
+                    if name != "resume_upload":
+                        raise ValueError("此操作不接受附件。")
+                    notice = str(service.upload_resume(uploaded[0], uploaded[1], data))
+                else:
+                    notice = str(service.action(name, data) or "操作已记录。")
             except ValueError as exc:
                 self._action_result(HTTPStatus.BAD_REQUEST, str(exc), page)
             except Exception as exc:

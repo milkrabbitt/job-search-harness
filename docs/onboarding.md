@@ -26,11 +26,17 @@
 
 没有启用的来源或可用渠道时无法开始自动发现。手动登记一条岗位可以供你跟进，但不等于系统获得全网搜索能力。
 
-### 可选：登记简介和简历
+### 上传简历并核对经历
 
-在向导中填写自己确认的简介；有现成简历时，可填写本机 PDF 绝对路径、版本名与适用范围，并勾选批准使用。程序接受最大 20 MB 的 PDF、保存私有副本和文件指纹，保留原文件。这一步不发送材料，也不自动提取 PDF 里的经历。
+打开 `/profile` 的「我的经历与简历」，从文件选择框上传不超过 20 MB 的 PDF，登记版本和适用岗位。附件批准只允许这份 PDF 用于申请。提取结果先显示在「核对简历文字」，修正后勾选确认，才能作为候选人经历用于匹配。扫描件、加密文件、缺少提取依赖和无法可靠解析时，会提示手动核对或补充。
 
-没有简历也能先扫描岗位。正式准备申请前，再补齐匹配范围的已批准 PDF、核实的简介与招聘联系人。[资料登记说明](install.md#private-profile)
+在同一页填写并确认最多 6000 字的真实经历摘要，可选填写最多 600 字的对外简介。没有 PDF 也能先填写经历或扫描岗位。准备申请前再补齐已批准的附件与核实的招聘联系人。 [资料上传与确认说明](candidate-guide.md)
+
+### 决定模型可以使用哪些经历
+
+勾选 `profile_model_consent`，表示允许所选模型接收已确认经历和 JD 的裁剪、遮蔽后文字。PDF 原文件保存在本机，模型请求仍可能包含真实工作和项目内容。未勾选时按本机规则筛选。
+
+启用经历匹配后，模型的匹配点、缺口和未知项引用本次提供的证据。自动申请等待与当前经历、JD 对应的 `related` 复核。硬性排除持续生效。修改经历或 JD 后需要重新判断，旧申请草稿会要求重新核对。 [模型数据范围](models.md)
 
 ### 4. 核对并开始工作
 
@@ -41,12 +47,22 @@
 ## 从哪里看结果
 
 - **运行概览**：任务是否运行、渠道错误、扫描进度及外发状态。
-- **岗位**：来源、薪资区间、匹配依据、缺口和待核实项。没有岗位时先看来源错误，不要只反复启动。
+- **岗位**：来源、薪资区间、规则依据、已确认经历与 JD 的关联、模型引用、缺口和待核实项。没有岗位时先看来源错误。
+- **薪资对比**：选择 2 至 6 个岗位，查看原文、计薪周期及明示人民币月薪与薪数的算术对比。缺失信息保留待确认。 [口径说明](compensation.md)
 - **草稿与发送**：收件人、正文、批准的 PDF、发送状态及回执。准备好草稿不代表已经发送。
 - **招聘消息 / 待我决定**：已同步或登记的会话、面试安排与需要你拍板的事项。
+- **我的经历与简历**：上传并确认 PDF 文字、补充经历、设置模型数据同意和邮箱自动处理授权。
 - **资料与设置**：核实偏好、资料和模型配置；修改后检查是否需重新测试。
 
-进程需要持续运行。关网页后任务可继续；终端停止、电脑休眠、关机或断网会影响执行。恢复后先查看错误和未确认的发送结果，不要盲目重发。
+## 启用邮箱自动申请与跟进
+
+先完成首次配置，在 macOS 配置并核验网易 126，确认邮箱已经启用、可发送且未暂停。然后在 `/profile` 勾选自动处理范围并保存，允许系统使用已批准材料进行符合规则的邮件申请和常规回复。需要时另行勾选无回复后的单次跟进，按设置的工作日间隔执行。
+
+常规自动回复限于明确的简历或公开作品请求、已有事实答案的简短问题，以及匹配规则覆盖的自我介绍、兴趣和流程问答。自我介绍使用你确认的最多 600 字对外简介。面试时间、作业、薪资、Offer、到岗、搬迁和敏感资料等进入「待我决定」，有此类待定事项的会话会停止自动常规回复。拒绝、要求停止联系或已指定人工跟进的会话按原范围停止外联。
+
+BOSS、猎聘、鱼泡的站内动作仍在已登录浏览器中完成，工作台保存队列和核实后的记录。验证码与身份验证由本人处理。 [渠道操作范围](../job_harness/CHANNELS.md)
+
+进程需要持续运行。关网页后任务可继续；终端停止、电脑休眠、关机或断网会影响执行。恢复后先查看错误和未确认的发送结果。
 
 <a name="maintenance"></a>
 
@@ -90,7 +106,11 @@ Windows 示例：
 
 ## English summary
 
-Open `/setup`: enter goals, choose and test a provider (or explicitly choose no model), register a recruiting source, then review and start. Source URL checks at save time do not prove network access or parsing; the first scan provides that evidence. Starting scans leaves outbound sending disabled.
+Open `/setup` to enter goals, choose and test a provider (or explicitly choose no model), register sources, then review and start. The first scan checks actual access and parsing. Starting scans leaves outbound sending disabled.
+
+Use `/profile` to upload a PDF up to 20 MB, review its extracted text, and confirm your experience. An optional public introduction is limited to 600 characters. Grant `profile_model_consent` if you want the configured model to receive bounded, redacted experience and JD text. The PDF stays local. In this mode, applications wait for a current related review, and hard rules still apply. Use `/salary` to compare 2–6 tracked roles while preserving unknown pay details.
+
+With an enabled, verified, send-ready 126 mailbox, explicitly authorize automatic applications and narrow routine replies in `/profile`. A separate option allows one follow-up after the configured business-day interval. Pending interview, salary, offer and other important decisions block automatic routine replies in that thread. Platform chat and submission continue in your logged-in browser.
 
 Keep the process running. Pause tasks and pause outbound sending separately. Revisiting `/setup` is non-destructive. Saving goals or model settings pauses work and outbound sending; retest changed models/keys, then review and start again. Use a new empty data directory for a clean reset rather than overwriting real data.
 

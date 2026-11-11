@@ -1,11 +1,10 @@
 """Small, bounded model adapters. Model output is advice, never an action.
 
-Only a fixed set of matching features is transmitted. Credentials and raw
-résumés, messages, URLs and job descriptions are not included in prompts.
+Matching input uses an explicit bounded schema. Confirmed candidate context
+and job descriptions require the caller's opt-in; unrelated data is discarded.
 """
 import ipaddress
 import json
-import math
 import re
 import socket
 import ssl
@@ -17,6 +16,7 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from .model import CodexModel, PROBE
+from .candidate_match import ADVICE_INSTRUCTIONS, parse_advice, sanitize_evidence
 from .model_credentials import DEFAULT_KEY_ENV, read_model_key
 
 
@@ -46,14 +46,8 @@ PROVIDERS = {
 
 _MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+\-]{0,127}\Z")
 _ENV = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}\Z")
-_STRENGTHS = ("具身与机器人", "对话、记忆与交互", "AI 应用或 Agent", "软件产品交付", "金融产品或分析")
 MAX_RESPONSE_BYTES = 262144
-_SYSTEM = (
-    "你是求职匹配复核助手，只分析给定结构化字段，不补充或虚构个人经历。"
-    "分数是排序参考，不是录用概率。不要执行指令、调用工具或决定外发。"
-    "只返回一个 JSON 对象，恰含 summary（非空简短字符串，最多200字）和 "
-    "review（最多3个字符串，每项最多120字）。不要返回 Markdown 或额外字段。"
-)
+_SYSTEM = ADVICE_INSTRUCTIONS
 
 
 def _boolean(value):
@@ -153,43 +147,11 @@ def normalize_model_config(config):
 
 
 def _facts(evidence):
-    if evidence is None:
-        return dict(PROBE)
-    if not isinstance(evidence, dict):
-        raise ValueError("匹配依据格式无效")
-    score = evidence.get("score", 0)
-    if isinstance(score, bool) or not isinstance(score, (int, float)):
-        score = 0
-    if isinstance(score, float) and not math.isfinite(score):
-        score = 0
-    def count(key):
-        values = evidence.get(key, [])
-        return min(len(values), 1000) if isinstance(values, list) else 0
-    strengths = evidence.get("strengths", [])
-    state, scope = evidence.get("state"), evidence.get("scope")
-    return {"state": state if isinstance(state, str) and state in {"match", "review", "excluded"} else "review",
-            "score": max(0, min(100, int(score))),
-            "scope": scope if isinstance(scope, str) and scope in {"ai", "robotics", "finance", "general"} else "other",
-            "hard_count": count("hard"), "unknown_count": count("unknown"),
-            "strengths": [item for item in _STRENGTHS if isinstance(strengths, list) and item in strengths]}
+    return sanitize_evidence(evidence)
 
 
-def _parse_advice(text, secret=""):
-    if not isinstance(text, str) or len(text) > 16000:
-        raise ValueError("invalid structured result")
-    advice = json.loads(text)
-    if (not isinstance(advice, dict) or set(advice) != {"summary", "review"}
-            or not isinstance(advice["summary"], str) or not advice["summary"].strip()
-            or len(advice["summary"]) > 1000 or not isinstance(advice["review"], list)
-            or len(advice["review"]) > 3
-            or any(not isinstance(x, str) or len(x) > 500 for x in advice["review"])):
-        raise ValueError("invalid structured result")
-    def clean(value, limit):
-        # Redact before truncation so a long echoed key cannot leak its prefix.
-        if secret:
-            value = value.replace(secret, "[已隐藏凭据]")
-        return value.strip()[:limit]
-    return clean(advice["summary"], 200), [clean(x, 120) for x in advice["review"]]
+def _parse_advice(text, secret="", evidence=None):
+    return parse_advice(text, evidence, secret)
 
 
 def _token(value):
@@ -308,7 +270,8 @@ class HTTPModel:
                 text = choice["message"]["content"]
                 usage = body.get("usage") or {}
                 input_tokens, output_tokens = _token(usage.get("prompt_tokens")), _token(usage.get("completion_tokens"))
-            summary, review = _parse_advice(text, key)
+            advice = _parse_advice(text, key, facts)
+            summary, review = advice["summary"], advice["review"]
             detail = ("连接验证通过 · " if evidence is None else "建议 · ") + summary
             if review:
                 detail += " · " + "；".join(review)
@@ -316,6 +279,7 @@ class HTTPModel:
                 # A malicious/erroring proxy may echo headers in output.
                 detail = detail.replace(key, "[已隐藏凭据]")
             return {"state": "done", "model": model, "detail": detail,
+                    "advice": advice,
                     "input_tokens": input_tokens, "output_tokens": output_tokens}
         except HTTPError as exc:
             exc.close()

@@ -190,7 +190,7 @@ class Harness:
         status = str(data.get("status") or "unknown")
         jd = {"title": title, "company": company, "location": location, "salary": data.get("salary"),
               "description": desc, "requirements": req, "status": status, "published_at": data.get("published_at")}
-        assessment = rules.assess(jd, self.preferences(c), [r["pattern"] for r in fetch(c, "SELECT pattern FROM exclusions")])
+        assessment = self.job_match(c, jd, self.preferences(c))
         match_json = dump(assessment)
         jid = alias["job_id"] if alias else None
         if not jid and domain and location:
@@ -230,6 +230,9 @@ class Harness:
         if status in rules.RECRUITING_ENDED:
             c.execute("UPDATE outbox SET state='stale',updated_at=?,evidence='岗位关闭或已停止联系' WHERE job_id=? AND state IN ('draft','queued')",
                       (stamp(), jid))
+        if not data.get("_history"):
+            from .experience_flow import schedule
+            schedule(self, c, jid)
         return jid
 
     def authorize_recipient(self, c, job_id, recipient, source):
@@ -381,15 +384,18 @@ class Harness:
             return "unknown"
         return job["status"]
 
-    @staticmethod
-    def job_match(c, job, prefs):
+    def job_match(self, c, job, prefs):
         exclusions = [r["pattern"] for r in fetch(c, "SELECT pattern FROM exclusions")]
-        reviewed = one(c, "SELECT state FROM job_reviews WHERE job_id=?", (job["id"],))
-        return rules.assess(job, prefs, exclusions, review_cleared=bool(reviewed and reviewed["state"] == "cleared"))
+        reviewed = one(c, "SELECT state FROM job_reviews WHERE job_id=?", (job.get("id"),))
+        assessment = rules.assess(job, prefs, exclusions, review_cleared=bool(reviewed and reviewed["state"] == "cleared"))
+        from .experience_flow import decorate
+        return decorate(self, c, job, assessment)
 
     def template(self, c, job, match):
+        candidate = setting(c,"candidate_profile",{})
+        intro = str(candidate.get("intro") or "") if candidate.get("confirmed") is True else ""
         if match["scope"] == "general":
-            fact = self.verified_fact(c, "summary_general")
+            fact = self.verified_fact(c, "summary_general") or intro
             if not fact:
                 return None
             next_step = "希望有机会进一步沟通。" if job["status"] in rules.RECRUITING else RECRUITING_QUESTION
@@ -404,6 +410,7 @@ class Harness:
         else:
             fact = self.verified_fact(c, "summary_app")
             portfolio = self.verified_fact(c, "portfolio_public")
+        fact = fact or intro
         if not fact:
             return None
         job_text = " ".join(str(job.get(key) or "") for key in ("title", "description", "requirements"))
@@ -478,6 +485,8 @@ class Harness:
             reason = "缺少已核实的招聘收件人"
         elif match["hard"]:
             reason = "岗位不符合硬性条件"
+        elif match.get("candidate_gate"):
+            reason = match["candidate_gate"]
         elif rules.UNKNOWN_RECRUITING in match["unknown"] and not prefs["allow_unknown_recruiting"]:
             reason = "当前在招状态未确认，投递偏好尚未允许"
         elif not body or not (match["state"] == "match" or (manual and rules.UNKNOWN_RECRUITING not in match["unknown"])):
@@ -494,11 +503,12 @@ class Harness:
                                  subject="应聘 " + job["title"],
                                  body=body, resume=resume, auto=auto,
                                  origin_task_id=origin_task_id)
-        if not oid and prefs["allow_unknown_recruiting"]:
+        if not oid:
             previous = one(c, """SELECT id FROM outbox WHERE job_id=? AND kind='application' AND state='stale'
                         AND attempts=0 AND provider_id IS NULL AND policy_generated=1
-                        AND evidence IN ('招聘状态未能在有效期内核实','当前在招状态未确认，投递偏好尚未允许',?)""",
-                           (jid, RECRUITING_QUESTION_REQUIRED))
+                        AND (evidence='经历或简历已更新，请重新生成申请'
+                             OR (? AND evidence IN ('招聘状态未能在有效期内核实','当前在招状态未确认，投递偏好尚未允许',?)))""",
+                           (jid, bool(prefs["allow_unknown_recruiting"]), RECRUITING_QUESTION_REQUIRED))
             if previous:
                 oid = previous["id"]
                 ts = stamp()
@@ -614,7 +624,12 @@ class Harness:
             return True
         if classification == "auto":
             return True
-        auto_reply = (channel == "email" and classification in {"resume", "portfolio", "experience"} and msgid and
+        critical = one(c,"""SELECT id FROM decisions WHERE thread_id=? AND state='pending'
+                    AND kind IN ('interview','assignment','compensation','availability','offer','sensitive') LIMIT 1""",(thread["id"],))
+        reply_job = one(c,"SELECT * FROM jobs WHERE id=?",(thread["job_id"],)) if thread["job_id"] else None
+        eligible = bool(reply_job and not self.job_match(c,reply_job,self.preferences(c))["hard"])
+        auto_reply = (channel == "email" and classification in {"resume", "portfolio", "experience", "review"} and msgid
+                      and eligible and not critical and
                       self.trusted_thread(c, thread, sender) and not thread["stopped"] and not manual_followup(c, thread["job_id"])
                       and not data.get("possibly_truncated") and not data.get("reply_to_unverified")
                       and (not data.get("reply_to") or rules.address(data.get("reply_to")) == sender) and not
@@ -641,6 +656,9 @@ class Harness:
                         if answer:
                             reply = "您好，" + answer + "谢谢。"
                         break
+            if not reply:
+                from .routine_replies import reply as routine_reply
+                reply = routine_reply(c,latest_body,self.job_match(c,job,self.preferences(c)))
             if reply:
                 self.create_outbox(c, job_id=thread["job_id"], thread=thread, anchor={"id": mid}, kind="reply",
                                    recipient=sender, subject=subject if re.match(r"^Re:", subject, re.I) else "Re: " + subject,
@@ -769,6 +787,8 @@ class Harness:
         match = self.job_match(c, job, prefs)
         if match["hard"] and item["kind"] in {"application", "followup"}:
             return "岗位不再符合硬性条件"
+        if item["kind"] == "reply" and item.get("policy_generated") and (match["hard"] or match.get("candidate_gate")):
+            return "当前岗位被排除或经历匹配已变化，停止自动回复"
         if item["kind"] == "followup" and job["status"] not in rules.RECRUITING:
             return "跟进前须重新核实岗位仍在招聘"
         if item["kind"] == "application":
@@ -781,6 +801,8 @@ class Harness:
             dupe = self.duplicate_reason(c, job)
             if dupe:
                 return dupe
+            if match.get("candidate_gate"):
+                return match["candidate_gate"]
             if (item["policy_generated"] or unknown_recruiting) and match["state"] != "match":
                 return "自动投递的匹配条件已变更"
             if unknown_recruiting and not re.search(r"(?:是否|还有|还在|仍在).{0,16}(?:招聘|机会|开放|招募)", item["body"]):
@@ -1145,7 +1167,9 @@ class Harness:
                 prepared = self.prepare(c, jid, origin_task_id=payload.get("task_id"))
                 if prepared:
                     draft_count += 1
-                if configured_model or (legacy_review and data.get("recipient") and data.get("requirements") and not prepared):
+                from .experience_flow import model_input
+                candidate_mode = model_input(self,c,one(c,"SELECT * FROM jobs WHERE id=?",(jid,))) is not None
+                if not candidate_mode and (configured_model or (legacy_review and data.get("recipient") and data.get("requirements") and not prepared)):
                     job = one(c, "SELECT match_json FROM jobs WHERE id=?", (jid,))
                     assessment = json.loads(job["match_json"])
                     if (assessment["state"] in ({"match", "review"} if configured_model else {"review"})
@@ -1257,6 +1281,8 @@ class Harness:
             c.execute("""UPDATE jobs SET description=?,requirements=?,location=?,salary=?,status=?,url=?,observed_at=?,match_json=?,match_score=?
                          WHERE id=? AND channel='liepin'""", (merged["description"], merged["requirements"], merged["location"],
                          merged["salary"], merged["status"], detail["url"], stamp(), dump(match), match["score"], jid))
+            from .experience_flow import schedule
+            schedule(self,c,jid)
             self.step(c, task_id, "完整猎聘详情", "done", {"来源": detail["url"], "状态": merged["status"],
                       "职责字数": len(merged["description"]), "要求字数": len(merged["requirements"])}, jid)
             self.prepare(c, jid, origin_task_id=task_id)
@@ -1345,8 +1371,27 @@ class Harness:
             elif kind == "verify_sent":
                 detail = self.verify_sent(payload["id"], row["id"])
             elif kind == "model_probe":
-                model_state, detail = self.invoke_model_probe(payload.get("job_id"))
-                if model_state != "done":
+                expected = payload.get("candidate_hash")
+                skip = False
+                if expected:
+                    from .experience_flow import model_input, review_hash
+                    with self.store.tx() as c:
+                        live_job = one(c,"SELECT * FROM jobs WHERE id=?",(payload.get("job_id"),))
+                        current_input = model_input(self,c,live_job) if live_job else None
+                        current_key = review_hash(self,c,current_input) if current_input else None
+                        skip = current_key != expected or bool(one(c,
+                            "SELECT job_id FROM candidate_reviews WHERE job_id=? AND context_hash=? AND state='done'",
+                            (payload.get("job_id"),expected)))
+                if skip:
+                    model_state,detail = "done","经历或模型已更新，或当前复核已有结果；已跳过旧任务，未消耗模型调用"
+                else:
+                    model_state, detail = self.invoke_model_probe(payload.get("job_id"))
+                if model_state == "held" and "每日" in detail:
+                    state = "queued"
+                    due = (now()+timedelta(days=1)).replace(hour=9,minute=30,second=0).isoformat()
+                    with self.store.tx(True) as c:
+                        c.execute("UPDATE tasks SET attempts=MAX(attempts-1,0) WHERE id=?",(row["id"],))
+                elif model_state != "done":
                     state = "failed"
             else:
                 state, detail = "failed", "未识别的后台任务"
@@ -1438,8 +1483,13 @@ class Harness:
                     set_setting(c, "model_test", {"state": "held", "detail": held,
                                                   "config_hash": digest, "updated_at": stamp()})
                 return "held", held
-            job = one(c, "SELECT match_json FROM jobs WHERE id=?", (job_id,)) if job_id else None
-            info = json.loads(job["match_json"]) if job else None
+            job = one(c, "SELECT * FROM jobs WHERE id=?", (job_id,)) if job_id else None
+            info_before = json.loads(job["match_json"]) if job else None
+            from .experience_flow import model_input, review_hash
+            from .candidate_match import context_fingerprint
+            candidate_input = model_input(self, c, job) if job else None
+            candidate_hash = review_hash(self,c,candidate_input) if candidate_input else ""
+            info = candidate_input if candidate_input else info_before
             mid = c.execute("INSERT INTO model_runs(created_at,model,state) VALUES(?,?,'running')",
                             (stamp(), config["name"] or "CLI 默认")).lastrowid
             if setup:
@@ -1480,11 +1530,30 @@ class Harness:
                     set_setting(c, "model_test", {"state": result["state"], "detail": result["detail"],
                         "config_hash": digest, "run_id": mid, "updated_at": stamp()})
                     self.event(c, "模型连接测试 · " + ("通过" if result["state"] == "done" else "未通过"))
-            if job_id and result["state"] == "done" and current_digest == digest:
-                current = one(c, "SELECT match_json FROM jobs WHERE id=?", (job_id,))
-                if current and json.loads(current["match_json"]) == info:
-                    info["model_advice"] = result["detail"]
-                    c.execute("UPDATE jobs SET match_json=? WHERE id=?", (dump(info), job_id))
+            if job_id and current_digest == digest:
+                current = one(c, "SELECT * FROM jobs WHERE id=?", (job_id,))
+                latest_input = model_input(self, c, current) if current and candidate_hash else None
+                still_current = bool(latest_input and review_hash(self,c,latest_input) == candidate_hash)
+                if candidate_hash and still_current:
+                    if result["state"] == "done":
+                        from .candidate_match import validate_advice
+                        try:
+                            result["advice"] = validate_advice(result.get("advice"),latest_input,original_key)
+                        except (ValueError,TypeError):
+                            result = {"state":"failed","model":result["model"],"detail":"模型匹配结果缺少可核对的经历或岗位引用"}
+                            c.execute("UPDATE model_runs SET state='failed',detail=? WHERE id=?",(result["detail"],mid))
+                    c.execute("""INSERT INTO candidate_reviews VALUES(?,?,?,?,?,?)
+                         ON CONFLICT(job_id,context_hash) DO UPDATE SET state=excluded.state,result_json=excluded.result_json,
+                         model=excluded.model,updated_at=excluded.updated_at""",
+                         (job_id,candidate_hash,result["state"],dump(result),result["model"],stamp()))
+                    latest = self.job_match(c,current,self.preferences(c))
+                    latest["model_advice"] = result["detail"]
+                    c.execute("UPDATE jobs SET match_json=? WHERE id=?", (dump(latest), job_id))
+                    if result["state"] == "done" and not setting(c,"stopped",False) and not self.shutdown.is_set():
+                        self.prepare(c,job_id)
+                elif not candidate_hash and result["state"]=="done" and current and json.loads(current["match_json"]) == info_before:
+                    info_before["model_advice"] = result["detail"]
+                    c.execute("UPDATE jobs SET match_json=? WHERE id=?", (dump(info_before), job_id))
         if setup and not applied:
             return "held", "测试期间设置或凭据已变更，此结果不再适用；请测试当前配置"
         return result["state"], result["detail"]
@@ -1521,9 +1590,16 @@ class Harness:
                       (resolution, ts, decision_id))
         return job["company"] + " · " + MANUAL_FOLLOWUP
 
+    def upload_resume(self, filename, content, fields):
+        from .candidate_profile import receive_upload
+        return receive_upload(self, filename, content, fields)
+
     def action(self, name, data):
         data = dict(data)
         notice = "操作已保存"
+        if name in {"save_candidate_profile", "confirm_resume_text", "save_followup_authorization"}:
+            from .candidate_profile import save
+            return save(self, name, data)
         if name.startswith("setup_"):
             from .onboarding import handle_action
             return handle_action(self, name, data)
@@ -1634,6 +1710,16 @@ class Harness:
                             recipient=anchor["sender"], subject=anchor["subject"] if re.match(r"^Re:", anchor["subject"], re.I)
                             else "Re: " + anchor["subject"], body=resolution, in_reply_to=anchor["message_id"],
                             refs=json.loads(anchor["refs"]) + [anchor["message_id"]])
+                    if not new:
+                        previous = one(c,"""SELECT id FROM outbox WHERE thread_id=? AND anchor_id=? AND kind='reply'
+                                      AND state='stale' AND attempts=0 AND provider_id IS NULL
+                                      AND evidence='经历或简历已更新，请重新生成申请'""",(thread["id"],anchor["id"]))
+                        if previous:
+                            new = previous["id"]
+                            c.execute("""UPDATE outbox SET body=?,thread_revision=?,state='draft',approved=0,
+                                      approval_hash=NULL,policy_generated=0,resume_id=NULL,attachment_sha=NULL,
+                                      attachment_filename=NULL,evidence='本人重新核对经历后生成回复草稿',updated_at=?
+                                      WHERE id=?""",(resolution,thread["revision"],stamp(),new))
                     if new:
                         notice = "已保存决定并生成待批准的回复草稿"
             elif name == "preferences":
@@ -1858,6 +1944,8 @@ class Harness:
                                match_score DESC,created_at DESC LIMIT 700""")
             for job in jobs:
                 job["manual_followup"] = manual_followup(c, job["id"])
+                if setting(c,"candidate_profile") or one(c,"SELECT resume_id FROM resume_texts LIMIT 1"):
+                    job["match_json"] = dump(self.job_match(c,job,self.preferences(c)))
                 job["review"] = one(c, "SELECT * FROM job_reviews WHERE job_id=?", (job["id"],))
             threads = fetch(c, "SELECT * FROM threads ORDER BY updated_at DESC LIMIT 100")
             for thread in threads:
@@ -1867,6 +1955,7 @@ class Harness:
                         FROM messages m LEFT JOIN mail_audits a ON m.id=a.message_id
                         LEFT JOIN platform_message_sources p ON m.id=p.message_id
                         WHERE m.thread_id=? ORDER BY m.occurred_at,m.id""", (thread["id"],))
+            from .candidate_profile import snapshot as candidate_snapshot
             from .onboarding import snapshot as onboarding_snapshot
             onboarding, model_conf = onboarding_snapshot(self, c)
             model_last = one(c, "SELECT * FROM model_runs ORDER BY id DESC LIMIT 1")
@@ -1895,6 +1984,7 @@ class Harness:
                           "decisions_open": c.execute("SELECT count(*) FROM decisions WHERE state='pending'").fetchone()[0],
                           "queued_applications": c.execute("SELECT count(*) FROM outbox WHERE kind='application' AND state='queued'").fetchone()[0]},
                 "channels": channels, "jobs": jobs, "threads": threads,
+                "candidate": candidate_snapshot(self, c),
                 "outbox": outbox, "browser_actions": self.browser_actions.list(c),
                 "decisions": fetch(c, """SELECT d.*,t.job_id FROM decisions d LEFT JOIN threads t ON t.id=d.thread_id
                         ORDER BY d.state='pending' DESC,d.due_at IS NULL,d.due_at,d.id DESC LIMIT 200"""),

@@ -2,7 +2,7 @@
 
 [返回首页](../README.md) · [安装](install.md) · [首次配置](onboarding.md)
 
-在本机 `/setup` 选择供应商、填写模型名和端点，然后测试。模型复核只总结有限的结构化匹配特征，提供复核建议；岗位筛选、发送授权和任务状态仍由工作台管理。
+在本机 `/setup` 选择供应商、填写模型名和端点，然后测试。在 `/profile` 核对真实经历并勾选匹配数据授权后，模型可结合裁剪后的经历与岗位 JD 复核关联。岗位硬性排除、发送授权和任务状态由工作台管理。
 
 ## 支持矩阵
 
@@ -39,7 +39,11 @@ MiniMax 的推理可能占用输出预算；上限太低时可能无法返回完
 
 模型测试发送合成的匹配特征并检查结构化回答，云端调用可能收费。它验证当时的凭据、模型、URL 和输出格式，不证明招聘来源可读取，也不保证供应商之后永不限流。
 
-真实复核发送有限字段：匹配状态、分数、岗位分类、缺口数量、未知项数量以及固定列表中的优势标签；不把完整简历、原始招聘聊天或整份 JD 作为模型请求。云端接入仍会将这些字段传给你配置的模型服务。
+真实经历匹配需要在 `/profile` 勾选 `profile_model_consent`，并有已启用的可用模型。请求使用已确认的经历摘要、已核实的事实和已批准简历中由你确认的文字，结合裁剪后的职位名称、地点、薪资、职责、要求和求职偏好。常见联系方式、凭据、链接与本机路径按规则遮蔽，长度也有限制。原 PDF 留在本机私有目录，模型收到的是处理后的文字。
+
+这仍可能包含你的真实工作和项目内容。保存经历、批准 PDF 附件和同意发送经历给模型分别确认，勾选前应核对所选服务与资料。未同意时继续本机规则匹配。连接测试仍使用合成数据，旧式统计复核也只发送结构化特征。
+
+模型结果列出匹配点、缺口和未知项，并引用输入中的候选人证据与 JD 字段。引用必须能对应到本次提供的内容。启用经历匹配后，自动申请等待对应当前资料与 JD 的 `related` 复核结果；结果不明确、不相关、失败或尚未完成时保留待核验。资料或 JD 更新会触发重新判断。模型结论始终受岗位硬性排除和既有外发规则约束。 [经历与简历操作说明](candidate-guide.md)
 
 更换供应商、模型名、API Base 或凭据后，重新测试。账号无权限、余额不足、模型不存在、超时或输出格式不符合要求时，查看本机结果；不要把保存成功当成连接成功。
 
@@ -81,7 +85,11 @@ Choose a provider in `/setup`, enter an exact model name available to your accou
 
 Cloud APIs need API credentials and may incur charges. A chat subscription does not automatically provide API credits. Local Ollama/LM Studio must already be running with a model loaded. Codex CLI needs its own successful local authentication.
 
-Only limited structured match features are sent for review, not full résumés or raw recruiter threads. Remote endpoints require HTTPS; plain HTTP is loopback-only. The client does not follow redirects, automatically retry or fail over. Retest after changing provider, model, endpoint or credentials.
+A real experience review requires the `profile_model_consent` checkbox in `/profile` and an enabled model. It sends bounded text from confirmed candidate evidence and the job description, with common contact details, credentials, links and paths redacted by rules. The source PDF stays in private local storage. This text may still describe real work and projects, so review the provider and content before consenting.
+
+Results cite supplied evidence. Automatic applications in this mode wait for a `related` review matching the current candidate and job context, while hard exclusions and sending authorization remain in effect. Without this consent, local rule matching remains available. Connection tests use synthetic data.
+
+Remote endpoints require HTTPS; plain HTTP is loopback-only. The client does not follow redirects, automatically retry or fail over. Retest after changing provider, model, endpoint or credentials.
 
 Environment keys take precedence over unencrypted files under `<data-dir>/private/model-keys/`. POSIX permissions are restricted; Windows relies on your user's directory permissions. Keys are excluded from SQLite backups. The HTTP output cap does not cap Codex CLI output. A nonempty currency budget blocks calls because reliable monetary accounting is not implemented.
 

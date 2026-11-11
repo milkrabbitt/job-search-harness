@@ -10,7 +10,8 @@ in the selected environment. No system software or execution policy is changed.
 param(
     [switch]$Demo,
     [switch]$Example,
-    [switch]$InstallTimezone
+    [switch]$InstallTimezone,
+    [switch]$InstallDependencies
 )
 
 Set-StrictMode -Version Latest
@@ -46,6 +47,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not create .venv. Check that Python includes venv and that this directory is writable.' }
         $python = $venvPython
         $pythonArgs = @()
+    }
+    if ($InstallDependencies) {
+        & $python @pythonArgs -X utf8 -m pip install -r (Join-Path $projectDir 'requirements.txt')
+        if ($LASTEXITCODE -ne 0) { throw 'Installing PDF dependencies failed. Retry -InstallDependencies in the selected environment.' }
     }
     if ($InstallTimezone) {
         & $python @pythonArgs -X utf8 -m pip install tzdata

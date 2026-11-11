@@ -9,10 +9,11 @@
 1. **先填自己的条件。** 首次打开进入 `/setup`：岗位方向、城市、最低薪资和排除项都由你填写，空安装不会猜测你的目标。
 2. **接上自己能用的模型。** 选择 Codex CLI、云端 API 或本机模型服务，填写实际可用的模型名，完成连接测试。聊天会员、API 余额和本机模型是不同的接入方式，详见[模型说明](docs/models.md)。也可以先用不调用模型的规则流程。
 3. **告诉它去哪里找。** 登记允许读取的公开招聘来源，再测试和启动。启动后会检查已配置的来源，并按设置筛选和复核；没有来源就没有自动发现的岗位，不会凭空在全网找工作。
-4. **把发过的材料记下来。** 在向导填写自己确认的简介，并可选登记本机 PDF 路径；程序会保存私有副本和文件指纹，不需要手工编辑 JSON。核实收件人、正文和附件后再启用真实外发。申请可回看岗位、简历版本及发送证据，结果不明时先核验。
-5. **收到回复，知道该谁接手。** 已同步或登记的招聘消息可以按岗位查看。面试时间、薪资、到岗和 Offer 留给你决定；自动回复只覆盖渠道允许且已授权的明确请求。
+4. **上传简历，用实际经历筛岗位。** 在「我的经历与简历」选择 PDF，核对提取的文字，再补充自己的贡献和对外简介。勾选模型匹配授权后，工作台会把裁剪、遮蔽联系方式后的经历和实际 JD 交给你选择的模型，列出有关联的经历、缺口和待核实项，并保留来源引用。修改经历或更换模型后会重新复核。
+5. **授权渠道后继续跟进。** 网易 126 接通且核验可发送后，可在页面授权申请、常规回复和一次未回复跟进。对方明确索要已批准的简历、作品或问到有依据的简单问题时，按规则处理；每次发出的正文、附件、回复和凭据都留在记录里。收到面试邀约或条件协商，会交到「待我决定」，等待你确认。
+6. **把几个岗位放在一起看薪资。** 「薪资对比」可选 2–6 个岗位，对照原报价、币种、计薪周期和明示薪数。只有口径明确时才折算年额；没有公开或无法确认的部分显示「待确认」。
 
-![招聘消息页：同一会话里可以看到申请与面试邀约](docs/assets/demo-inbox.jpg)
+![实际薪资对比页面：明示的月薪和13薪，与薪资未公开的岗位并列展示](docs/assets/salary-comparison.jpg)
 
 *真实产品截图，岗位、邮件和邀请均为虚构演示数据。*
 
@@ -20,7 +21,7 @@
 
 ## 安装后，打开向导开始配置
 
-需要 Python 3.9+、SQLite 3.24+ 和 IANA 时区数据。控制台目前为中文；默认运行使用 Python 标准库，无需 Node.js 构建。
+需要 Python 3.9+、SQLite 3.24+ 和 IANA 时区数据。控制台目前为中文；PDF 文字提取使用 pypdf；无需 Node.js 构建。
 
 **macOS / Linux**
 
@@ -28,7 +29,7 @@
 git clone https://github.com/milkrabbitt/job-search-harness.git
 cd job-search-harness
 ./scripts/doctor.sh
-./scripts/bootstrap.sh
+./scripts/bootstrap.sh --install-deps
 ./scripts/serve.sh
 ```
 
@@ -37,7 +38,7 @@ cd job-search-harness
 ```powershell
 git clone https://github.com/milkrabbitt/job-search-harness.git
 cd job-search-harness
-.\scripts\bootstrap.ps1 -InstallTimezone
+.\scripts\bootstrap.ps1 -InstallTimezone -InstallDependencies
 .\scripts\doctor.ps1
 .\scripts\serve.ps1
 ```
@@ -59,14 +60,14 @@ Windows 的 `-InstallTimezone` 会在选定 Python 环境安装时区数据包�
 macOS / Linux：
 
 ```sh
-./scripts/bootstrap.sh --demo
+./scripts/bootstrap.sh --demo --install-deps
 ./scripts/serve.sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-.\scripts\bootstrap.ps1 -Demo
+.\scripts\bootstrap.ps1 -Demo -InstallDependencies
 .\scripts\serve.ps1
 ```
 
@@ -86,13 +87,13 @@ Windows PowerShell：
 
 模型适配已实现并接受模拟协议测试；这些测试不等于每一家供应商的真实账号、模型和地区端点均已调用成功。请在自己的电脑上通过连接测试后启用。[完整模型矩阵](docs/models.md)
 
-新用户默认使用通用筛选，按自己填写的岗位关键词、城市、薪资与排除项判断；旧版 AI 应用、产品、机器人、金融产品预设保留为可选兼容模式。模型复核提供建议，不代表录用概率或完整技能评估；未公开的薪资留待核实，目前没有自动比较 Offer 总包的功能。简介和 PDF 可在向导登记；多条经历和简历版本也可通过[私有资料文件](examples/profile.example.json)导入。不会自动从 PDF 提取履历。
+新用户默认按自己填写的岗位关键词、城市、薪资与排除项筛选；旧版 AI 应用预设仍可选。确认的经历可供本机规则比较；只有你同意后，才用于模型匹配。模型结论需引用给定经历和 JD，不能取消硬性排除或自行授权外发。PDF 原件保持不变，扫描件、加密件和无法提取的内容明确留待手动核对。[简历与匹配说明](docs/candidate-guide.md) · [薪资口径说明](docs/compensation.md)
 
 ## 使用前容易遗漏的事
 
 - **API 费用。** 设置每日调用次数和超时；HTTP API 另有输出 token 上限，Codex CLI 不受该输出字段控制。金额预算目前没有可靠的实时计价，非空金额预算会阻止调用，不能当成美元账单控制器。
 - **本地保存不等于加密。** API Key 可从环境变量读取，或保存在私有数据目录的 `private/model-keys/`。本地文件不加密；POSIX 使用私有文件权限，Windows 依赖当前用户目录权限。不要共享数据目录或提交到 Git。
-- **云模型会收到有限的匹配特征。** 本机运行控制台不等于本地推理。使用本机 Ollama / LM Studio 服务时，也应自行确认服务的实际后端。
+- **经历匹配有单独的模型同意开关。** 勾选后，所选模型会接收经过遮蔽和裁剪的确认经历、JD 与求职偏好；未勾选只做本机比较。 本机运行控制台不等于本地推理。使用本机 Ollama / LM Studio 服务时，也应自行确认服务的实际后端。
 - **备份不包含模型密钥。** 数据库恢复后需重新提供凭据并测试连接；简历原文件也要单独保管。换模型、端点或凭据后重新测试。
 - **任务与外发分开。** 启动扫描不会自动授权发送申请。真实外发仍受独立开关、资料核验和渠道授权约束。
 

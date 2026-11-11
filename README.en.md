@@ -20,7 +20,7 @@ A job-search workspace that runs on your computer. Set your goals, model and rec
 
 ## Install and open setup
 
-Requires Python 3.9+, SQLite 3.24+ and IANA timezone data. The default runtime uses the Python standard library; no Node.js build is needed.
+Requires Python 3.9+, SQLite 3.24+ and IANA timezone data. PDF text extraction uses pypdf; no Node.js build is needed.
 
 **macOS / Linux**
 
@@ -28,7 +28,7 @@ Requires Python 3.9+, SQLite 3.24+ and IANA timezone data. The default runtime u
 git clone https://github.com/milkrabbitt/job-search-harness.git
 cd job-search-harness
 ./scripts/doctor.sh
-./scripts/bootstrap.sh
+./scripts/bootstrap.sh --install-deps
 ./scripts/serve.sh
 ```
 
@@ -37,7 +37,7 @@ cd job-search-harness
 ```powershell
 git clone https://github.com/milkrabbitt/job-search-harness.git
 cd job-search-harness
-.\scripts\bootstrap.ps1 -InstallTimezone
+.\scripts\bootstrap.ps1 -InstallTimezone -InstallDependencies
 .\scripts\doctor.ps1
 .\scripts\serve.ps1
 ```
@@ -59,14 +59,14 @@ The demo needs no real résumé, mailbox or model account. Use a separate direct
 macOS / Linux:
 
 ```sh
-./scripts/bootstrap.sh --demo
+./scripts/bootstrap.sh --demo --install-deps
 ./scripts/serve.sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\scripts\bootstrap.ps1 -Demo
+.\scripts\bootstrap.ps1 -Demo -InstallDependencies
 .\scripts\serve.ps1
 ```
 
@@ -86,7 +86,7 @@ The default data directory is `.job-harness-dev/`. For real use, set the same `J
 
 Adapters are implemented and covered by simulated protocol tests. Those tests do not establish live access to every provider, model or region. Complete a connection test using your own account before enabling an integration. See the [provider matrix](docs/models.md).
 
-New users default to general screening based on their own role keywords, cities, salary floor and exclusions. The older AI application, product, robotics and financial-product preset remains an optional compatibility mode. Model review is advisory, not an acceptance probability or complete skill assessment. Unlisted salary stays unknown; full offer-package comparison is not implemented. Register a summary and PDF through setup, or import multiple facts and versions through a [private profile file](examples/profile.example.json). PDF work-history extraction is not implemented.
+New users default to general screening based on their own role keywords, cities, salary floor and exclusions. The older AI application, product, robotics and financial-product preset remains an optional compatibility mode. Model review is advisory, not an acceptance probability or complete skill assessment. Unlisted salary stays unknown; full offer-package comparison is not implemented. Register a summary and PDF through setup, or import multiple facts and versions through a [private profile file](examples/profile.example.json). Upload a PDF on `/profile`, review extracted text and explicitly confirm it before matching. Scanned or encrypted files require manual review.
 
 ## Before using real data
 
@@ -115,3 +115,16 @@ python3 -B -m unittest discover -s tests -v
 Automation covers core workflows, model protocols, configuration boundaries and simulated sending. Check actual cross-platform results in [GitHub Actions](https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml). Live provider accounts, mail delivery and website login require verification in the user's own environment.
 
 [MIT licensed](LICENSE). [Report issues](https://github.com/milkrabbitt/job-search-harness/issues) using fictional data; do not upload résumés, recruiting messages, secret configuration or private logs.
+
+
+## Résumé upload, experience matching and pay comparison
+
+On `/profile`, upload a PDF (up to 20 MB), review its extracted text and confirm it. Provide a confirmed experience summary and, optionally, a short introduction for outbound messages. Keep your desired roles, cities and pay preferences in `/setup`. PDF bytes stay in private local storage. Scanned, encrypted or unreadable documents are marked for manual input.
+
+Experience-to-JD model matching requires a separate consent checkbox. The configured model receives bounded, redacted confirmed experience, actual JD text and selected preferences. Each fit point must reference supplied evidence. A changed résumé, profile or model invalidates its prior review; hard exclusions and sending authorization remain in application code.
+
+Authorized and ready NetEase 126 can send approved applications, routine fact-backed replies and one configured follow-up. Interview scheduling, pay, start dates and offers enter the decision queue and pause automatic replies in that thread. Recruiting sites without supported sending APIs still use browser handoff.
+
+On `/salary`, select 2–6 roles to compare original pay, currency, period, salary months and any annualized range that can be calculated from explicit terms. Unknowns stay pending confirmation; no currency conversion or estimated bonuses are added. See [salary details](docs/compensation.md).
+
+![Actual fictional-data salary comparison](docs/assets/salary-comparison.jpg)

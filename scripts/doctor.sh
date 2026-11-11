@@ -12,7 +12,14 @@ esac
 
 project_dir=$(CDPATH= cd -P "$(dirname "$0")/.." && pwd)
 cd "$project_dir"
-python_bin=${PYTHON_BIN:-python3}
+python_bin=${PYTHON_BIN:-}
+if [ -z "$python_bin" ]; then
+    if [ -x "$project_dir/.venv/bin/python" ]; then
+        python_bin="$project_dir/.venv/bin/python"
+    else
+        python_bin=python3
+    fi
+fi
 data_dir=${JOB_HARNESS_DATA_DIR:-"$project_dir/.job-harness-dev"}
 
 if ! command -v "$python_bin" >/dev/null 2>&1; then
@@ -27,6 +34,7 @@ import os
 import shutil
 import socket
 import sys
+import importlib.util
 from pathlib import Path
 
 if sys.version_info < (3, 9):
@@ -109,5 +117,7 @@ if sys.platform == "darwin":
     print("[可选] macOS 支持后台服务和钥匙串接入。")
 else:
     print("[可选] 当前平台使用前台服务。钥匙串和 LaunchAgent 功能需 macOS。")
+print("[通过] PDF 提取依赖 pypdf" if importlib.util.find_spec("pypdf") else
+      "[提示] 未安装 pypdf；页面可以保存 PDF，但自动提取文字需要先安装 requirements.txt。")
 print("诊断完成。未检查账号、凭据、网络或招聘渠道。")
 PYTHON
