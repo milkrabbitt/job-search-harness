@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="384" viewBox="0 0 1200 384" role="img" aria-labelledby="hero-title hero-description">
+  <title id="hero-title">Job Search Harness — Make your next move clear.</title>
+  <desc id="hero-description">Your experience. Your opportunities. Your next step. A local workspace with your own model, available as open source. Abstract stacked notes illustrate gathering evidence, comparing opportunities, and deciding what comes next.</desc>
+  <defs>
+    <pattern id="paper-lines" width="6" height="6" patternUnits="userSpaceOnUse">
+      <path d="M0 6H6" stroke="#122E32" stroke-opacity="0.025" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="384" rx="16" fill="#F4F1E8"/>
+  <rect width="1200" height="384" rx="16" fill="url(#paper-lines)"/>
+  <path d="M54 66H1146" stroke="#122E32" stroke-opacity="0.18"/>
+
+  <g fill="#122E32">
+    <text x="54" y="43" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="2.5">JOB SEARCH HARNESS</text>
+    <text x="54" y="153" font-family="Georgia, 'DejaVu Serif', serif" font-size="70" letter-spacing="-2">Make your next</text>
+    <text x="54" y="227" font-family="Georgia, 'DejaVu Serif', serif" font-size="70" letter-spacing="-2">move clear.</text>
+    <g font-family="Arial, Helvetica, sans-serif" font-size="23" fill="#4B6260">
+      <text x="57" y="273">Your experience. Your opportunities.</text>
+      <text x="57" y="305">Your next step.</text>
+    </g>
+  </g>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" letter-spacing="1.3" fill="#145E54">
+    <text x="57" y="355">LOCAL WORKSPACE</text>
+    <circle cx="233" cy="350" r="2" fill="#8C9F94"/>
+    <text x="255" y="355">BRING YOUR OWN MODEL</text>
+    <circle cx="490" cy="350" r="2" fill="#8C9F94"/>
+    <text x="512" y="355">OPEN SOURCE</text>
+  </g>
+
+  <!-- An editorial illustration of notes, not a simulated product screen. -->
+  <g aria-hidden="true">
+    <circle cx="1090" cy="140" r="69" fill="#E4D7B9"/>
+    <path d="M773 99V333" stroke="#122E32" stroke-opacity="0.15"/>
+    <g transform="rotate(8 991 215)">
+      <rect x="866" y="105" width="250" height="226" fill="#E5E9DF" stroke="#AEBDB1"/>
+      <path d="M886 125H1096M886 137H1021" stroke="#81998A" stroke-opacity="0.4"/>
+    </g>
+    <g transform="rotate(-5 980 216)">
+      <rect x="851" y="97" width="260" height="238" fill="#122E32"/>
+      <path d="M873 121H1089" stroke="#F4F1E8" stroke-opacity="0.25"/>
+      <text x="872" y="153" font-family="Georgia, 'DejaVu Serif', serif" font-size="66" fill="#B7CEB9">“</text>
+      <g font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#B7CEB9" letter-spacing="1">
+        <text x="875" y="187">01</text>
+        <text x="875" y="235">02</text>
+        <text x="875" y="283">03</text>
+      </g>
+      <g font-family="Georgia, 'DejaVu Serif', serif" font-size="27" fill="#F4F1E8">
+        <text x="911" y="190">Gather.</text>
+        <text x="911" y="238">Compare.</text>
+        <text x="911" y="286">Decide.</text>
+      </g>
+      <path d="M912 203H1087M912 251H1087M912 299H1087" stroke="#F4F1E8" stroke-opacity="0.2"/>
+    </g>
+    <path d="M1119 311L1132 324L1119 337L1106 324Z" fill="#145E54"/>
+  </g>
+</svg>

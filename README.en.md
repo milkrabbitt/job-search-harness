@@ -1,130 +1,134 @@
 # Job Search Harness
 
-A job-search workspace that runs on your computer. Set your goals, model and recruiting sources, then keep job evidence, application materials, recruiter messages and next actions together. Background tasks and outbound sending have separate controls. The console is currently in Chinese.
+**Your next move, in one place.**
 
-[First setup](#start) · [Offline demo](#quickstart) · [AI installation prompt](docs/install.en.md#ai-install) · [中文](README.md) · [Releases](https://github.com/milkrabbitt/job-search-harness/releases)
+You've saved the role, tailored the résumé and heard back from a recruiter. Now: which job actually fits your experience, what did you send, and who needs a reply?
 
-## How it works
+Job Search Harness keeps that context together on your computer: **your experience, the job description, the application and the next decision.** Upload a résumé, review the evidence, compare stated pay and pick up the conversation where you left off.
 
-1. **Set your goals.** The first-run `/setup` wizard asks for role direction, cities, salary floor and exclusions. An empty installation does not infer your personal goals.
-2. **Connect a model you can use.** Choose a locally authenticated Codex CLI, a cloud API or a running local model service, then test the exact model and endpoint. You can also start with rules only. Chat subscriptions and API access are different products; see [model setup](docs/models.md).
-3. **Register sources and start.** Add public recruiting sources you are allowed to read. After validation, start scanning configured sources and reviewing matches. No configured sources means no automatic job discovery; this is not unrestricted autonomous web search.
-4. **Keep a verifiable application record.** Enter a self-confirmed summary and optionally register a local PDF path in setup. Harness keeps a private copy and fingerprint; editing JSON is not required. Review the recipient, body and attachment before enabling real outbound sending. Uncertain email results require reconciliation before retrying.
-5. **Continue the conversation.** Review synced or recorded threads with their jobs. Interview times, salary, availability and offers remain your decisions. Automatic replies cover only narrow, preauthorized requests supported by the channel.
+[Try the fictional demo](#quickstart) · [Let AI help you install](#ai-install) · [Choose your model](#models) · [中文](README.md)
 
-![Recruiter thread with fictional application and interview invitation](docs/assets/demo-inbox.jpg)
+![Job Search Harness — Make your next move clear.](docs/assets/hero.svg)
 
-*Actual console screenshot. All demo jobs, messages and receipts are fictional or simulated.*
-
-<a name="start"></a>
-
-## Install and open setup
-
-Requires Python 3.9+, SQLite 3.24+ and IANA timezone data. PDF text extraction uses pypdf; no Node.js build is needed.
-
-**macOS / Linux**
-
-```sh
-git clone https://github.com/milkrabbitt/job-search-harness.git
-cd job-search-harness
-./scripts/doctor.sh
-./scripts/bootstrap.sh --install-deps
-./scripts/serve.sh
-```
-
-**Windows PowerShell**
-
-```powershell
-git clone https://github.com/milkrabbitt/job-search-harness.git
-cd job-search-harness
-.\scripts\bootstrap.ps1 -InstallTimezone -InstallDependencies
-.\scripts\doctor.ps1
-.\scripts\serve.ps1
-```
-
-On Windows, `-InstallTimezone` installs timezone data in the selected Python environment.
-
-Open the address shown in the terminal, normally `http://127.0.0.1:8876/setup`. Complete **goals → model → sources → tests → start**. A cloud connection test may incur API charges. Setup needs your actual goals, credentials and sources; an installation assistant cannot invent them.
-
-Keep the process running. Closing the browser does not stop it; press **Ctrl+C** in the terminal to stop. Sleep and shutdown pause work.
-
-[Full installation guide](docs/install.en.md) · [First-run and daily use](docs/onboarding.md) · [Channel requirements](job_harness/CHANNELS.md)
+*The current interface is in Chinese. [See actual product screenshots with fictional data →](docs/quick-tour.md)*
 
 <a name="quickstart"></a>
 
-## Try the offline demo
+## Try it before connecting an account
 
-The demo needs no real résumé, mailbox or model account. Use a separate directory from real data.
+**No real résumé, mailbox or model account required.** The demo uses fictional records and simulated sending. Setup downloads the code and dependencies; running the demo does not contact recruiting accounts.
 
-macOS / Linux:
+<details>
+<summary><strong>macOS / Linux — clone, start, explore</strong></summary>
 
 ```sh
+git clone https://github.com/milkrabbitt/job-search-harness.git
+cd job-search-harness
 ./scripts/bootstrap.sh --demo --install-deps
 ./scripts/serve.sh
 ```
 
-Windows PowerShell:
+</details>
+
+<details>
+<summary><strong>Windows PowerShell — clone, start, explore</strong></summary>
 
 ```powershell
-.\scripts\bootstrap.ps1 -Demo -InstallDependencies
+git clone https://github.com/milkrabbitt/job-search-harness.git
+cd job-search-harness
+.\scripts\bootstrap.ps1 -Demo -InstallTimezone -InstallDependencies
 .\scripts\serve.ps1
 ```
 
-The default data directory is `.job-harness-dev/`. For real use, set the same `JOB_HARNESS_DATA_DIR` outside the repository when initializing and starting the service.
+</details>
 
-## What is supported
+Open the address printed in the terminal, usually **http://127.0.0.1:8876/**. Keep the process running; **Ctrl+C** stops it. Use a fresh directory for the demo and keep real data separate.
 
-| Integration | Current scope |
-| --- | --- |
-| Codex CLI | Uses a locally authenticated CLI and an available model to review match features. CLI parameter compatibility is required. |
-| OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Moonshot, Zhipu, MiniMax | API adapters are implemented. Supply your own available model name, account access and regional endpoint. |
-| Ollama, LM Studio | Connect to a local service you have started with a model loaded. Harness does not download models for you. |
-| OpenAI-compatible | A compatible API adapter; not a claim that every third-party service has been live-tested. |
-| Company websites | Read registered and accessible public recruiting sources. Submit application forms on the original site. |
-| NetEase 126 and authorized Liepin search | Credential integration currently requires **macOS Keychain**. Windows/Linux core support does not enable these full channels. |
-| BOSS Zhipin, Liepin chat, Yupao | Queue actions, check duplicates and retain evidence. A human completes site actions in a logged-in browser. |
-
-Adapters are implemented and covered by simulated protocol tests. Those tests do not establish live access to every provider, model or region. Complete a connection test using your own account before enabling an integration. See the [provider matrix](docs/models.md).
-
-New users default to general screening based on their own role keywords, cities, salary floor and exclusions. The older AI application, product, robotics and financial-product preset remains an optional compatibility mode. Model review is advisory, not an acceptance probability or complete skill assessment. Unlisted salary stays unknown; full offer-package comparison is not implemented. Register a summary and PDF through setup, or import multiple facts and versions through a [private profile file](examples/profile.example.json). Upload a PDF on `/profile`, review extracted text and explicitly confirm it before matching. Scanned or encrypted files require manual review.
-
-## Before using real data
-
-- **Control calls, not an assumed bill.** Set a daily call limit and timeout. HTTP APIs also have an output-token cap; that field does not cap Codex CLI output. Reliable dollar accounting is not implemented; a nonempty currency budget blocks calls rather than pretending to enforce a price limit.
-- **Local files are not encrypted.** Model keys can come from environment variables or the data directory's `private/model-keys/`. POSIX permissions are restricted; Windows relies on your user directory's access controls. Never share or commit these files.
-- **Cloud review sends limited match features to the provider.** A local console does not imply local inference. Verify the backend of your local model service too.
-- **Database backups exclude model keys.** Reconfigure credentials and test after restoring. Keep original résumé files separately. Retest after changing model, endpoint or key.
-- **Starting scans does not authorize sending.** Outbound messages still require their own controls, verified materials and channel authorization.
-
-[Pause, reconfigure, back up and uninstall](docs/onboarding.md#maintenance) · [Troubleshooting](docs/troubleshooting.md)
+Requires Python 3.9+, SQLite 3.24+ and IANA timezone data. PDF extraction uses `pypdf`; the scripts can install the dependencies in a local virtual environment. [Full installation guide →](docs/install.en.md)
 
 <a name="ai-install"></a>
 
-## Let your coding assistant install it
+### Prefer your coding assistant to do the setup?
 
-Give the [installation prompt](docs/install.en.md#ai-install) to a terminal-capable assistant such as Codex, Claude Code or Cursor Agent. Installation and runtime model choice are separate. Enter secrets locally, never in the conversation.
+[Copy the ready-to-use installation prompt →](docs/install.en.md#ai-install)
+
+Give it to a terminal-capable assistant such as Codex, Claude Code or Cursor Agent. It can check the environment, install the project and verify the demo. Your installation assistant and your runtime model are separate choices; enter credentials locally, not in the conversation.
+
+## See why a role fits your actual experience
+
+Upload a **PDF up to 20 MB** on `/profile`, review the extracted text and confirm what is accurate. You can add your own experience summary and a separate introduction for recruiter replies. Approving a PDF for sending and confirming its text for matching are separate decisions.
+
+With your **separate consent**, the selected model can compare bounded, redacted confirmed experience with the actual job description and selected preferences. Fit points must cite supplied evidence; gaps and unknowns remain visible. A changed profile, résumé, job or model requires a current review. Hard exclusions and sending authorization still apply.
+
+Scanned, encrypted or unreadable PDFs require manual input or review. The original PDF stays local; the model consent applies to the processed text, which may still contain real work and project details. [How résumé matching works →](docs/candidate-guide.md)
+
+## Put the pay figures next to each other
+
+Select **2–6 saved roles** on `/salary`. See the original quote, currency, pay period, stated salary-payment count and source together.
+
+Annual reference amounts are calculated **only when CNY, monthly pay and the salary-payment count are explicit**. For example, “CNY 20–30K/month, 13 payments” becomes CNY 260–390K/year. An unexplained “20–30K” stays unconfirmed. No guessed bonuses, currency conversion or complete offer-package valuation.
+
+![Actual salary comparison using fictional jobs and explicit salary terms](docs/assets/salary-comparison.jpg)
+
+[See the calculation rules →](docs/compensation.md)
+
+## Follow the conversation without losing the record
+
+Keep application text, approved résumé versions, recruiter messages and available sending evidence together. An uncertain email result is reconciled before another send is considered.
+
+With a **verified, send-ready NetEase 126 mailbox and your authorization**, Harness can handle eligible applications and narrow, fact-backed routine replies. A separate setting permits one configured follow-up. Interview arrangements, salary, start dates, offers and other important decisions go to you and pause automatic routine replies in that thread.
+
+![Recruiter conversation with a fictional application and interview invitation](docs/assets/demo-inbox.jpg)
+
+**Scanning is not permission to send.** Background tasks and outbound sending have separate controls. [Take the visual tour →](docs/quick-tour.md) *(Chinese)*
+
+<a name="start"></a>
+
+## Ready to use your own information?
+
+Choose a private data directory outside the repository and initialize **without demo mode**. Open `/setup` to enter your goals, choose and test a model or select rules-only screening, register recruiting sources, and start. Then use `/profile` to confirm your experience and résumé.
+
+- **Sources come from you.** Harness checks configured, supported public sources and authorized channels. Saving a URL checks its structure; the first scan establishes whether it can be read and parsed. No sources means no automatic job discovery.
+- **Your process stays in view.** Tasks need the service running; closing a browser tab is fine, but sleep or shutdown pauses work. Outbound sending remains separately controlled.
+- **Site actions retain a human step.** BOSS Zhipin, Liepin chat and Yupao submissions/replies happen in your logged-in browser. Harness stores the queue and verified records. Company application forms are also submitted on the original site.
+- **Some channels are macOS-only.** NetEase 126 and authorized Liepin search currently use macOS Keychain. Windows/Linux support the core workspace and model integrations, not those full credential-backed channels.
+
+[Private setup and résumé registration](docs/install.en.md#private-profile) · [Channel requirements](job_harness/CHANNELS.md) · [Pause, backup and recovery](docs/onboarding.md#maintenance)
+
+<a name="models"></a>
+
+## Use a model you already have access to
+
+| Connection | Your choice |
+| --- | --- |
+| Cloud APIs | OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Moonshot, Zhipu, MiniMax |
+| Local model services | Ollama or LM Studio, already running with a model loaded |
+| CLI | A locally authenticated, compatible Codex CLI |
+| Other services | An OpenAI-compatible endpoint you configure |
+| No model | Local rule-based screening |
+
+These are **implemented adapters with simulated protocol tests**, not a claim that every provider, account, model and region has passed live testing. Supply an available model name and complete a connection test on your computer. Chat subscriptions do not automatically include API credits. [Provider setup and limits →](docs/models.md)
+
+## Your data, with explicit boundaries
+
+Experience-to-JD matching sends processed experience and job text only with its separate consent. Redaction reduces common identifiers; it does not make career history anonymous. A local workspace does not make a cloud model local.
+
+Model keys come from environment variables or **unencrypted private local files**. Keep data and keys out of Git. Database backups exclude model keys and original PDF files. Set daily call and timeout limits; HTTP APIs also have an output cap. Exact monetary accounting is not implemented—a nonempty currency budget blocks calls rather than pretending to enforce a bill limit.
+
+[Data and model details](docs/models.md) · [Troubleshooting](docs/troubleshooting.md)
 
 <a name="tests"></a>
 
-## Verification and feedback
+## Built to be inspected and improved
 
 ```sh
-python3 -B -m unittest discover -s tests -v
+.venv/bin/python -B -m unittest discover -s tests -v
 ```
 
-Automation covers core workflows, model protocols, configuration boundaries and simulated sending. Check actual cross-platform results in [GitHub Actions](https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml). Live provider accounts, mail delivery and website login require verification in the user's own environment.
+This uses the default installation environment. On Windows, use `.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v`; for a custom environment, use its Python.
 
-[MIT licensed](LICENSE). [Report issues](https://github.com/milkrabbitt/job-search-harness/issues) using fictional data; do not upload résumés, recruiting messages, secret configuration or private logs.
+Tests cover core workflows, model protocols, configuration boundaries and simulated sending. Check actual platform results in [GitHub Actions](https://github.com/milkrabbitt/job-search-harness/actions/workflows/tests.yml). Real provider accounts, mail delivery and site login still need verification in your own environment.
 
+**Want better tools on the applicant's side? Give it a Star.** Try the demo, then tell us which part of your search needs less busywork.
 
-## Résumé upload, experience matching and pay comparison
-
-On `/profile`, upload a PDF (up to 20 MB), review its extracted text and confirm it. Provide a confirmed experience summary and, optionally, a short introduction for outbound messages. Keep your desired roles, cities and pay preferences in `/setup`. PDF bytes stay in private local storage. Scanned, encrypted or unreadable documents are marked for manual input.
-
-Experience-to-JD model matching requires a separate consent checkbox. The configured model receives bounded, redacted confirmed experience, actual JD text and selected preferences. Each fit point must reference supplied evidence. A changed résumé, profile or model invalidates its prior review; hard exclusions and sending authorization remain in application code.
-
-Authorized and ready NetEase 126 can send approved applications, routine fact-backed replies and one configured follow-up. Interview scheduling, pay, start dates and offers enter the decision queue and pause automatic replies in that thread. Recruiting sites without supported sending APIs still use browser handoff.
-
-On `/salary`, select 2–6 roles to compare original pay, currency, period, salary months and any annualized range that can be calculated from explicit terms. Unknowns stay pending confirmation; no currency conversion or estimated bonuses are added. See [salary details](docs/compensation.md).
-
-![Actual fictional-data salary comparison](docs/assets/salary-comparison.jpg)
+[Report an issue](https://github.com/milkrabbitt/job-search-harness/issues) with fictional data, improve the docs or contribute code. [MIT licensed](LICENSE).
