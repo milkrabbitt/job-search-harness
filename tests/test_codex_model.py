@@ -16,7 +16,9 @@ class CodexModelTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.executable = self.root / "codex.exe"
         self.executable.write_text("fake executable for mocked subprocess")
-        self.environment = patch.dict(os.environ, {}, clear=True)
+        # Windows resolves Path.home() from USERPROFILE; POSIX uses HOME.
+        # Keep both inside the fixture, never the runner's actual CLI profile.
+        self.environment = patch.dict(os.environ, {"HOME": str(self.root), "USERPROFILE": str(self.root)}, clear=True)
         self.environment.start()
         self.addCleanup(self.environment.stop)
 
